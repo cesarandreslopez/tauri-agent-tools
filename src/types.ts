@@ -19,7 +19,7 @@ export interface BridgeConfig {
   token: string;
 }
 
-export type DisplayServer = 'x11' | 'wayland' | 'unknown';
+export type DisplayServer = 'x11' | 'wayland' | 'darwin' | 'unknown';
 
 export type ImageFormat = 'png' | 'jpg';
 

@@ -4,6 +4,7 @@ import type { DisplayServer, PlatformAdapter } from './types.js';
 import { detectDisplayServer, ensureTools } from './platform/detect.js';
 import { X11Adapter } from './platform/x11.js';
 import { WaylandAdapter } from './platform/wayland.js';
+import { MacOSAdapter } from './platform/macos.js';
 import { registerScreenshot } from './commands/screenshot.js';
 import { registerInfo } from './commands/info.js';
 import { registerDom } from './commands/dom.js';
@@ -30,6 +31,7 @@ async function getAdapter(): Promise<PlatformAdapter> {
     checkedTools = ds;
   }
 
+  if (ds === 'darwin') return new MacOSAdapter();
   return ds === 'x11' ? new X11Adapter() : new WaylandAdapter();
 }
 

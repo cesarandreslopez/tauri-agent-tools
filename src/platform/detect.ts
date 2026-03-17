@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process';
 import type { DisplayServer } from '../types.js';
 
 export function detectDisplayServer(): DisplayServer {
+  if (process.platform === 'darwin') return 'darwin';
   if (process.env.WAYLAND_DISPLAY) return 'wayland';
   if (process.env.DISPLAY) return 'x11';
   const session = process.env.XDG_SESSION_TYPE;
@@ -11,8 +12,9 @@ export function detectDisplayServer(): DisplayServer {
 }
 
 function commandExists(cmd: string): Promise<boolean> {
+  const which = process.platform === 'win32' ? 'where' : 'which';
   return new Promise((resolve) => {
-    execFile('which', [cmd], (error) => resolve(!error));
+    execFile(which, [cmd], (error) => resolve(!error));
   });
 }
 
@@ -52,10 +54,31 @@ export async function checkWaylandTools(): Promise<ToolCheck[]> {
   );
 }
 
+export async function checkMacOSTools(): Promise<ToolCheck[]> {
+  const tools: Array<{ name: string; installHint: string }> = [
+    { name: 'screencapture', installHint: 'Built-in on macOS' },
+    { name: 'osascript', installHint: 'Built-in on macOS' },
+    { name: 'sips', installHint: 'Built-in on macOS' },
+    { name: 'convert', installHint: 'brew install imagemagick' },
+  ];
+
+  return Promise.all(
+    tools.map(async (t) => ({
+      ...t,
+      available: await commandExists(t.name),
+    })),
+  );
+}
+
 export async function ensureTools(displayServer: DisplayServer): Promise<void> {
-  const checks = displayServer === 'wayland'
-    ? await checkWaylandTools()
-    : await checkX11Tools();
+  let checks: ToolCheck[];
+  if (displayServer === 'darwin') {
+    checks = await checkMacOSTools();
+  } else if (displayServer === 'wayland') {
+    checks = await checkWaylandTools();
+  } else {
+    checks = await checkX11Tools();
+  }
 
   const missing = checks.filter((t) => !t.available);
   if (missing.length > 0) {

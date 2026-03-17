@@ -1,7 +1,8 @@
 import { readdir, readFile, unlink } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import type { BridgeConfig } from '../types.js';
 
-const TOKEN_DIR = '/tmp';
+const TOKEN_DIR = tmpdir();
 const TOKEN_PREFIX = 'tauri-dev-bridge-';
 const TOKEN_SUFFIX = '.token';
 
