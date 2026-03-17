@@ -1,0 +1,13 @@
+[package]
+name = "tauri-dev-bridge-example"
+version = "0.1.0"
+edition = "2021"
+description = "Example Tauri app with dev bridge for tauri-dev-tools"
+
+[dependencies]
+tauri = { version = "2", features = ["devtools"] }
+tiny_http = "0.12"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+scopeguard = "1"
+rand = "0.8"
