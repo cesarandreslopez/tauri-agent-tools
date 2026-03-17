@@ -67,8 +67,11 @@ sequenceDiagram
 
     CLI->>Bridge: POST /eval {js, token}
     Bridge->>Bridge: Validate token
-    Bridge->>WV: evaluate_script(js)
-    WV-->>Bridge: JavaScript result
+    Bridge->>Bridge: Generate UUID request ID
+    Bridge->>WV: eval(wrapped JS with callback)
+    WV->>WV: Evaluate expression
+    WV->>Bridge: __TAURI__.core.invoke("__dev_bridge_result", {id, value})
+    Bridge->>Bridge: Match result by ID, unblock HTTP thread
     Bridge-->>CLI: {result: ...}
 
     Note over Bridge: App shutdown

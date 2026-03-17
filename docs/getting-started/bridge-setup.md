@@ -15,6 +15,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 scopeguard = "1"
 rand = "0.8"
+uuid = { version = "1", features = ["v4"] }
 ```
 
 ### 2. Copy the bridge module
@@ -27,11 +28,21 @@ cp "$(npm root -g)/tauri-agent-tools/examples/tauri-bridge/src/dev_bridge.rs" sr
 
 ### 3. Wire into main.rs
 
+Register the bridge's Tauri command and start the bridge during setup:
+
 ```rust
 mod dev_bridge;
 
 fn main() {
-    tauri::Builder::default()
+    let mut builder = tauri::Builder::default();
+
+    if cfg!(debug_assertions) {
+        builder = builder.invoke_handler(tauri::generate_handler![
+            dev_bridge::__dev_bridge_result
+        ]);
+    }
+
+    builder
         .setup(|app| {
             if cfg!(debug_assertions) {
                 if let Err(e) = dev_bridge::start_bridge(app.handle()) {
@@ -44,6 +55,17 @@ fn main() {
         .expect("error while running tauri application");
 }
 ```
+
+!!! note "Merging with existing commands"
+    If your app already uses `.invoke_handler()`, merge the bridge command into it:
+    ```rust
+    builder = builder.invoke_handler(tauri::generate_handler![
+        your_command_one,
+        your_command_two,
+        dev_bridge::__dev_bridge_result,
+    ]);
+    ```
+    Tauri only supports a single `invoke_handler` per builder.
 
 ### 4. Verify
 
@@ -67,16 +89,19 @@ sequenceDiagram
     CLI->>FS: Scan tauri-dev-bridge-*.token
     CLI->>CLI: Check PID liveness
     CLI->>Bridge: POST /eval {js, token}
-    Bridge->>WV: evaluate_script(js)
-    WV-->>Bridge: result
+    Bridge->>WV: eval(wrapped JS with callback)
+    WV->>WV: Evaluate expression
+    WV->>Bridge: __TAURI__.core.invoke("__dev_bridge_result", {id, value})
     Bridge-->>CLI: {result}
 ```
 
 1. Bridge starts an HTTP server on a random localhost port
 2. A token file with `{ port, token, pid }` is written to `/tmp/`
 3. `tauri-agent-tools` discovers the token file and authenticates via the token
-4. Requests are `POST /eval { js, token }` — the bridge evaluates JS in the webview
-5. The token file is cleaned up when the app exits (via `scopeguard`)
+4. Requests are `POST /eval { js, token }` — the bridge injects JS into the webview
+5. The injected JS evaluates the expression, then calls back into Rust via `window.__TAURI__.core.invoke()` to deliver the result
+6. The HTTP handler waits for the result (up to 5 seconds) and returns it as JSON
+7. The token file is cleaned up when the app exits (via `scopeguard`)
 
 ## Security
 

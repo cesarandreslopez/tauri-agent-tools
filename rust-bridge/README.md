@@ -13,21 +13,30 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 scopeguard = "1"
 rand = "0.8"
+uuid = { version = "1", features = ["v4"] }
 ```
 
 ### 2. Copy the bridge module
 
 Copy `examples/tauri-bridge/src/dev_bridge.rs` into your Tauri project's `src/` directory.
 
-### 3. Start the bridge in your app
+### 3. Wire up in main.rs
 
-In your `main.rs` or app setup:
+In your `main.rs`, register the bridge's Tauri command and start the bridge during setup:
 
 ```rust
 mod dev_bridge;
 
 fn main() {
-    tauri::Builder::default()
+    let mut builder = tauri::Builder::default();
+
+    if cfg!(debug_assertions) {
+        builder = builder.invoke_handler(tauri::generate_handler![
+            dev_bridge::__dev_bridge_result
+        ]);
+    }
+
+    builder
         .setup(|app| {
             if cfg!(debug_assertions) {
                 if let Err(e) = dev_bridge::start_bridge(app.handle()) {
@@ -40,6 +49,16 @@ fn main() {
         .expect("error while running tauri application");
 }
 ```
+
+> **Note:** If your app already uses `.invoke_handler()` with its own commands, merge them into one handler:
+> ```rust
+> builder = builder.invoke_handler(tauri::generate_handler![
+>     your_command_one,
+>     your_command_two,
+>     dev_bridge::__dev_bridge_result,
+> ]);
+> ```
+> Tauri only supports a single `invoke_handler` per builder — commands from multiple calls won't merge.
 
 ### 4. Use tauri-agent-tools
 
@@ -61,8 +80,10 @@ tauri-agent-tools eval "document.title"
 1. Bridge starts an HTTP server on a random localhost port
 2. A token file with `{ port, token, pid }` is written to `/tmp/`
 3. `tauri-agent-tools` discovers the token file and authenticates via the token
-4. Requests are `POST /eval { js, token }` — the bridge evaluates JS in the webview
-5. The token file is cleaned up when the app exits
+4. Requests are `POST /eval { js, token }` — the bridge injects JS into the webview
+5. The injected JS evaluates the expression, then calls back into Rust via `window.__TAURI__.core.invoke("__dev_bridge_result", { id, value })` to deliver the result
+6. The HTTP handler thread waits for the result (up to 5 seconds) and returns it as JSON
+7. The token file is cleaned up when the app exits
 
 ## Security
 

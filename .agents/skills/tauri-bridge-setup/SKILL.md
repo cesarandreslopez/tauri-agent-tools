@@ -1,7 +1,7 @@
 ---
 name: tauri-bridge-setup
 description: How to add the tauri-agent-tools Rust dev bridge to a Tauri application
-version: 0.1.0
+version: 0.2.0
 tags: [tauri, rust, bridge, setup, integration]
 ---
 
@@ -21,6 +21,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 scopeguard = "1"
 rand = "0.8"
+uuid = { version = "1", features = ["v4"] }
 ```
 
 ## Step 2 — Copy the bridge module
@@ -43,13 +44,21 @@ cp node_modules/tauri-agent-tools/examples/tauri-bridge/src/dev_bridge.rs src-ta
 
 ## Step 3 — Wire up in main.rs
 
-Add the module declaration and start the bridge in your `src-tauri/src/main.rs`:
+Add the module declaration, register the bridge command, and start the bridge in your `src-tauri/src/main.rs`:
 
 ```rust
 mod dev_bridge;
 
 fn main() {
-    tauri::Builder::default()
+    let mut builder = tauri::Builder::default();
+
+    if cfg!(debug_assertions) {
+        builder = builder.invoke_handler(tauri::generate_handler![
+            dev_bridge::__dev_bridge_result
+        ]);
+    }
+
+    builder
         .setup(|app| {
             if cfg!(debug_assertions) {
                 if let Err(e) = dev_bridge::start_bridge(app.handle()) {
@@ -61,6 +70,16 @@ fn main() {
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
+```
+
+If you already have an `.invoke_handler()` with your own commands, merge them into one handler:
+
+```rust
+builder = builder.invoke_handler(tauri::generate_handler![
+    your_command_one,
+    your_command_two,
+    dev_bridge::__dev_bridge_result,
+]);
 ```
 
 If you already have a `.setup()` call, add the `if cfg!(debug_assertions) { ... }` block inside it.
