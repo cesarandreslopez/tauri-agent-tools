@@ -2,3 +2,13 @@ node_modules/
 dist/
 *.tsbuildinfo
 .DS_Store
+*.log
+logs/
+coverage/
+.env
+.env.local
+.vscode/
+.idea/
+*.vsix
+site/
+.claude/
