@@ -1,6 +1,6 @@
 import { Command } from 'commander';
 import { z } from 'zod';
-import { addBridgeOptions, resolveBridge } from './shared.js';
+import { addBridgeOptions, resolveBridge, parseEnum } from './shared.js';
 import type { BridgeClient } from '../bridge/client.js';
 import { ConsoleEntrySchema, ConsoleLevelSchema } from '../schemas/commands.js';
 import type { ConsoleEntry } from '../schemas/commands.js';
@@ -98,7 +98,7 @@ export function registerConsoleMonitor(program: Command): void {
     token?: string;
   }) => {
     if (opts.level) {
-      ConsoleLevelSchema.parse(opts.level);
+      parseEnum(ConsoleLevelSchema, opts.level, 'level');
     }
 
     const filterRegex = opts.filter ? compileRegex(opts.filter, 'filter') : undefined;

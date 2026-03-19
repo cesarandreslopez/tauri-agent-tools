@@ -4,7 +4,12 @@ import { addBridgeOptions, resolveBridge } from './shared.js';
 export function registerEval(program: Command): void {
   const cmd = new Command('eval')
     .description('Evaluate a JavaScript expression in the Tauri app')
-    .argument('<expression>', 'JavaScript expression to evaluate');
+    .argument('<expression>', 'JavaScript expression to evaluate')
+    .addHelpText('after', `
+Examples:
+  $ tauri-agent-tools eval "document.title"
+  $ tauri-agent-tools eval "window.location.href"
+  $ tauri-agent-tools eval "document.querySelectorAll('button').length"`);
 
   addBridgeOptions(cmd);
 

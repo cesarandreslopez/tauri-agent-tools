@@ -142,8 +142,10 @@ export function registerSnapshot(
     if (opts.json) {
       console.log(JSON.stringify(files, null, 2));
     } else {
-      for (const [key, path] of Object.entries(files)) {
-        console.log(`${key}: ${path}`);
+      for (const [key, value] of Object.entries(files)) {
+        const isError = value.startsWith('error: ');
+        const prefix = isError ? 'FAIL' : '  OK';
+        console.log(`[${prefix}] ${key}: ${value}`);
       }
     }
   });

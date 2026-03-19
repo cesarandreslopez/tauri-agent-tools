@@ -1,5 +1,5 @@
 import { Command } from 'commander';
-import { addBridgeOptions, resolveBridge } from './shared.js';
+import { addBridgeOptions, resolveBridge, parseEnum } from './shared.js';
 import { RustLogLevelSchema } from '../schemas/bridge.js';
 import type { RustLogEntry } from '../schemas/bridge.js';
 
@@ -61,7 +61,7 @@ export function registerRustLogs(program: Command): void {
     token?: string;
   }) => {
     if (opts.level) {
-      RustLogLevelSchema.parse(opts.level);
+      parseEnum(RustLogLevelSchema, opts.level, 'level');
     }
 
     const targetRegex = opts.target ? compileRegex(opts.target, 'target') : undefined;
