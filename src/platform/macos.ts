@@ -4,8 +4,8 @@ import { join } from 'node:path';
 import { z } from 'zod';
 import type { ImageFormat, PlatformAdapter, WindowInfo } from '../types.js';
 import { exec, validateWindowId } from '../util/exec.js';
-import { CGWindowInfoSchema } from '../schemas.js';
-import type { CGWindowInfo } from '../schemas.js';
+import { CGWindowInfoSchema } from '../schemas/platform.js';
+import type { CGWindowInfo } from '../schemas/platform.js';
 
 async function runJxa(script: string): Promise<string> {
   const { stdout } = await exec('osascript', ['-l', 'JavaScript', '-e', script]);

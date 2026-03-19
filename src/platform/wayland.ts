@@ -1,7 +1,7 @@
 import type { ImageFormat, PlatformAdapter, WindowInfo } from '../types.js';
 import { exec } from '../util/exec.js';
-import { SwayNodeSchema } from '../schemas.js';
-import type { SwayNode } from '../schemas.js';
+import { SwayNodeSchema } from '../schemas/platform.js';
+import type { SwayNode } from '../schemas/platform.js';
 
 function findInTree(node: SwayNode, title: string): SwayNode | null {
   if (node.name && node.name.includes(title)) return node;
