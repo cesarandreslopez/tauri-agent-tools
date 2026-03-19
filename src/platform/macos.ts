@@ -1,16 +1,11 @@
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { z } from 'zod';
 import type { ImageFormat, PlatformAdapter, WindowInfo } from '../types.js';
 import { exec, validateWindowId } from '../util/exec.js';
-
-interface CGWindowInfo {
-  kCGWindowNumber: number;
-  kCGWindowOwnerPID?: number;
-  kCGWindowName?: string;
-  kCGWindowOwnerName?: string;
-  kCGWindowBounds: { X: number; Y: number; Width: number; Height: number };
-}
+import { CGWindowInfoSchema } from '../schemas.js';
+import type { CGWindowInfo } from '../schemas.js';
 
 async function runJxa(script: string): Promise<string> {
   const { stdout } = await exec('osascript', ['-l', 'JavaScript', '-e', script]);
@@ -34,7 +29,7 @@ JSON.stringify(list.map(function(w) {
 }));`;
 
   const raw = await runJxa(script);
-  const windows: CGWindowInfo[] = JSON.parse(raw);
+  const windows = z.array(CGWindowInfoSchema).parse(JSON.parse(raw));
 
   // Detect Screen Recording permission issue: all names empty
   const hasAnyName = windows.some(

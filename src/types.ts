@@ -1,3 +1,5 @@
+export type { ElementRect, BridgeConfig, RustLogEntry } from './schemas.js';
+
 export interface WindowInfo {
   windowId: string;
   pid?: number;
@@ -6,18 +8,6 @@ export interface WindowInfo {
   y: number;
   width: number;
   height: number;
-}
-
-export interface ElementRect {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
-
-export interface BridgeConfig {
-  port: number;
-  token: string;
 }
 
 export type DisplayServer = 'x11' | 'wayland' | 'darwin' | 'unknown';
@@ -34,13 +24,5 @@ export interface PlatformAdapter {
 
 export interface WindowListEntry extends WindowInfo {
   tauri: boolean;
-  bridge?: BridgeConfig;
-}
-
-export interface RustLogEntry {
-  timestamp: number;   // ms since UNIX epoch
-  level: string;       // "trace" | "debug" | "info" | "warn" | "error"
-  target: string;      // Rust module path, e.g. "myapp::db"
-  message: string;
-  source: string;      // "rust" | "sidecar:<name>"
+  bridge?: import('./schemas.js').BridgeConfig;
 }

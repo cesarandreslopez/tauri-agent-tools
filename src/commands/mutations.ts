@@ -1,6 +1,11 @@
 import { Command } from 'commander';
+import { z } from 'zod';
 import { addBridgeOptions, resolveBridge } from './shared.js';
 import type { BridgeClient } from '../bridge/client.js';
+import { MutationEntrySchema } from '../schemas.js';
+import type { MutationEntry } from '../schemas.js';
+
+export type { MutationEntry };
 
 function buildPatchScript(selector: string, watchAttributes: boolean): string {
   const escaped = selector.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
@@ -60,17 +65,6 @@ const CLEANUP_SCRIPT = `(() => {
   }
   return 'cleaned';
 })()`;
-
-export interface MutationEntry {
-  type: string;
-  target: string;
-  timestamp: number;
-  added?: Array<{ tag: string; id?: string; class?: string }>;
-  removed?: Array<{ tag: string; id?: string; class?: string }>;
-  attribute?: string;
-  oldValue?: string | null;
-  newValue?: string | null;
-}
 
 export function formatEntry(entry: MutationEntry): string {
   const time = new Date(entry.timestamp).toISOString().slice(11, 23);
@@ -152,7 +146,7 @@ export function registerMutations(program: Command): void {
         if (stopped) break;
 
         const raw = await bridge.eval(DRAIN_SCRIPT);
-        const entries: MutationEntry[] = JSON.parse(String(raw));
+        const entries = z.array(MutationEntrySchema).parse(JSON.parse(String(raw)));
 
         for (const entry of entries) {
           if (opts.json) {

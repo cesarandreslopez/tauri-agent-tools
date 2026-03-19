@@ -1,5 +1,8 @@
 import { Command } from 'commander';
+import { z } from 'zod';
 import { addBridgeOptions, resolveBridge } from './shared.js';
+import { StorageEntrySchema } from '../schemas.js';
+import type { StorageEntry } from '../schemas.js';
 
 function escapeQuotes(s: string): string {
   return s.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
@@ -21,11 +24,6 @@ function buildSessionStorageScript(key?: string): string {
 
 function buildCookiesScript(): string {
   return `document.cookie`;
-}
-
-interface StorageEntry {
-  key: string;
-  value: string | null;
 }
 
 function parseCookies(cookieString: string): StorageEntry[] {
@@ -77,7 +75,7 @@ export function registerStorage(program: Command): void {
         if (opts.key) {
           result.localStorage = raw;
         } else {
-          result.localStorage = JSON.parse(String(raw));
+          result.localStorage = z.array(StorageEntrySchema).parse(JSON.parse(String(raw)));
         }
       }
 
@@ -86,7 +84,7 @@ export function registerStorage(program: Command): void {
         if (opts.key) {
           result.sessionStorage = raw;
         } else {
-          result.sessionStorage = JSON.parse(String(raw));
+          result.sessionStorage = z.array(StorageEntrySchema).parse(JSON.parse(String(raw)));
         }
       }
 

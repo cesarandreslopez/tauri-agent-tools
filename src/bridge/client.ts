@@ -1,4 +1,12 @@
-import type { BridgeConfig, ElementRect, RustLogEntry } from '../types.js';
+import type { BridgeConfig } from '../types.js';
+import {
+  ElementRectSchema,
+  ViewportSizeSchema,
+  A11yNodeSchema,
+  RustLogEntrySchema,
+} from '../schemas.js';
+import type { ElementRect, RustLogEntry, A11yNode } from '../schemas.js';
+import { z } from 'zod';
 
 export class BridgeClient {
   private baseUrl: string;
@@ -40,13 +48,13 @@ export class BridgeClient {
 
     const result = await this.eval(js);
     if (result === null || result === undefined) return null;
-    return JSON.parse(String(result));
+    return ElementRectSchema.parse(JSON.parse(String(result)));
   }
 
   async getViewportSize(): Promise<{ width: number; height: number }> {
     const js = `JSON.stringify({ width: window.innerWidth, height: window.innerHeight })`;
     const result = await this.eval(js);
-    return JSON.parse(String(result));
+    return ViewportSizeSchema.parse(JSON.parse(String(result)));
   }
 
   async getDocumentTitle(): Promise<string> {
@@ -54,7 +62,7 @@ export class BridgeClient {
     return String(result ?? '');
   }
 
-  async getAccessibilityTree(selector = 'body', depth = 10): Promise<unknown> {
+  async getAccessibilityTree(selector = 'body', depth = 10): Promise<A11yNode | null> {
     const escaped = selector.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
     const js = `(() => {
       function getRole(el) {
@@ -114,7 +122,7 @@ export class BridgeClient {
 
     const result = await this.eval(js);
     if (result === null || result === undefined) return null;
-    return JSON.parse(String(result));
+    return A11yNodeSchema.parse(JSON.parse(String(result)));
   }
 
   async fetchLogs(timeout = 5000): Promise<RustLogEntry[]> {
@@ -139,7 +147,7 @@ export class BridgeClient {
     }
 
     const data = await res.json();
-    return data.entries as RustLogEntry[];
+    return z.array(RustLogEntrySchema).parse(data.entries);
   }
 
   async ping(): Promise<boolean> {

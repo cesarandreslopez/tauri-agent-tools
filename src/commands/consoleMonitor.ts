@@ -1,6 +1,9 @@
 import { Command } from 'commander';
+import { z } from 'zod';
 import { addBridgeOptions, resolveBridge } from './shared.js';
 import type { BridgeClient } from '../bridge/client.js';
+import { ConsoleEntrySchema } from '../schemas.js';
+import type { ConsoleEntry } from '../schemas.js';
 
 const PATCH_SCRIPT = `(() => {
   if (window.__tauriDevToolsConsolePatched) return 'already_patched';
@@ -47,12 +50,6 @@ const CLEANUP_SCRIPT = `(() => {
   }
   return 'cleaned';
 })()`;
-
-interface ConsoleEntry {
-  level: string;
-  message: string;
-  timestamp: number;
-}
 
 function matchesLevel(entry: ConsoleEntry, level?: string): boolean {
   if (!level) return true;
@@ -136,7 +133,7 @@ export function registerConsoleMonitor(program: Command): void {
         if (stopped) break;
 
         const raw = await bridge.eval(DRAIN_SCRIPT);
-        const entries: ConsoleEntry[] = JSON.parse(String(raw));
+        const entries = z.array(ConsoleEntrySchema).parse(JSON.parse(String(raw)));
 
         for (const entry of entries) {
           if (!matchesLevel(entry, opts.level)) continue;

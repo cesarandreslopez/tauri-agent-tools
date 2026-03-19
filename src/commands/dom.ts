@@ -1,23 +1,8 @@
 import { Command } from 'commander';
+import { z } from 'zod';
 import { addBridgeOptions, resolveBridge } from './shared.js';
-
-interface DomNode {
-  tag: string;
-  id?: string;
-  classes?: string[];
-  text?: string;
-  rect?: { width: number; height: number };
-  attributes?: Record<string, string>;
-  styles?: Record<string, string>;
-  children?: DomNode[];
-}
-
-interface A11yNode {
-  role: string;
-  name?: string;
-  state?: Record<string, unknown>;
-  children?: A11yNode[];
-}
+import { DomNodeSchema, A11yNodeSchema } from '../schemas.js';
+import type { DomNode, A11yNode } from '../schemas.js';
 
 function formatA11yLine(node: A11yNode, indent: number): string {
   let line = '  '.repeat(indent);
@@ -192,7 +177,7 @@ export function registerDom(program: Command): void {
         return JSON.stringify(results);
       })()`;
       const raw = await bridge.eval(textScript);
-      const matches: DomNode[] = JSON.parse(String(raw));
+      const matches = z.array(DomNodeSchema).parse(JSON.parse(String(raw)));
 
       if (opts.count) {
         console.log(String(matches.length));
@@ -226,7 +211,7 @@ export function registerDom(program: Command): void {
     }
 
     if (opts.mode === 'accessibility') {
-      const tree = await bridge.getAccessibilityTree(selector, opts.depth) as A11yNode | null;
+      const tree = await bridge.getAccessibilityTree(selector, opts.depth);
       if (!tree) {
         throw new Error(`Element not found: ${selector}`);
       }
@@ -255,7 +240,7 @@ export function registerDom(program: Command): void {
       if (result === null || result === undefined) {
         throw new Error(`Element not found: ${selector}`);
       }
-      const node: DomNode = JSON.parse(String(result));
+      const node = DomNodeSchema.parse(JSON.parse(String(result)));
       if (opts.json) {
         console.log(JSON.stringify(node, null, 2));
       } else {
@@ -271,7 +256,7 @@ export function registerDom(program: Command): void {
       throw new Error(`Element not found: ${selector}`);
     }
 
-    const tree: DomNode = JSON.parse(String(result));
+    const tree = DomNodeSchema.parse(JSON.parse(String(result)));
 
     if (opts.json) {
       console.log(JSON.stringify(tree, null, 2));

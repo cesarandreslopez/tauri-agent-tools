@@ -1,14 +1,7 @@
 import type { ImageFormat, PlatformAdapter, WindowInfo } from '../types.js';
 import { exec } from '../util/exec.js';
-
-interface SwayNode {
-  id: number;
-  pid?: number;
-  name: string | null;
-  rect: { x: number; y: number; width: number; height: number };
-  nodes?: SwayNode[];
-  floating_nodes?: SwayNode[];
-}
+import { SwayNodeSchema } from '../schemas.js';
+import type { SwayNode } from '../schemas.js';
 
 function findInTree(node: SwayNode, title: string): SwayNode | null {
   if (node.name && node.name.includes(title)) return node;
@@ -26,7 +19,7 @@ function findInTree(node: SwayNode, title: string): SwayNode | null {
 export class WaylandAdapter implements PlatformAdapter {
   async findWindow(title: string): Promise<string> {
     const { stdout } = await exec('swaymsg', ['-t', 'get_tree', '-r']);
-    const tree: SwayNode = JSON.parse(stdout.toString());
+    const tree = SwayNodeSchema.parse(JSON.parse(stdout.toString()));
     const node = findInTree(tree, title);
     if (!node) {
       throw new Error(`No window found matching: ${title}`);
@@ -45,7 +38,7 @@ export class WaylandAdapter implements PlatformAdapter {
 
   async getWindowGeometry(windowId: string): Promise<WindowInfo> {
     const { stdout } = await exec('swaymsg', ['-t', 'get_tree', '-r']);
-    const tree: SwayNode = JSON.parse(stdout.toString());
+    const tree = SwayNodeSchema.parse(JSON.parse(stdout.toString()));
     const node = this._findById(tree, parseInt(windowId, 10));
     if (!node) {
       throw new Error(`Window ${windowId} not found in sway tree`);
@@ -67,7 +60,7 @@ export class WaylandAdapter implements PlatformAdapter {
 
   async listWindows(): Promise<WindowInfo[]> {
     const { stdout } = await exec('swaymsg', ['-t', 'get_tree', '-r']);
-    const tree: SwayNode = JSON.parse(stdout.toString());
+    const tree = SwayNodeSchema.parse(JSON.parse(stdout.toString()));
     const leaves: SwayNode[] = [];
     this._collectLeaves(tree, leaves);
 

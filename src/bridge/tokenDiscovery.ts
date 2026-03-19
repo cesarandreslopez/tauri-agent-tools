@@ -1,16 +1,11 @@
 import { readdir, readFile, unlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import type { BridgeConfig } from '../types.js';
+import { TokenFileSchema } from '../schemas.js';
 
 const TOKEN_DIR = tmpdir();
 const TOKEN_PREFIX = 'tauri-dev-bridge-';
 const TOKEN_SUFFIX = '.token';
-
-interface TokenFile {
-  port: number;
-  token: string;
-  pid: number;
-}
 
 function isPidAlive(pid: number): boolean {
   try {
@@ -39,9 +34,7 @@ export async function discoverBridge(): Promise<BridgeConfig | null> {
     const filePath = `${TOKEN_DIR}/${file}`;
     try {
       const content = await readFile(filePath, 'utf-8');
-      const data: TokenFile = JSON.parse(content);
-
-      if (!data.port || !data.token || !data.pid) continue;
+      const data = TokenFileSchema.parse(JSON.parse(content));
 
       if (!isPidAlive(data.pid)) {
         // Clean stale token files from dead processes
@@ -79,9 +72,7 @@ export async function discoverBridgesByPid(): Promise<Map<number, BridgeConfig>>
     const filePath = `${TOKEN_DIR}/${file}`;
     try {
       const content = await readFile(filePath, 'utf-8');
-      const data: TokenFile = JSON.parse(content);
-
-      if (!data.port || !data.token || !data.pid) continue;
+      const data = TokenFileSchema.parse(JSON.parse(content));
 
       if (!isPidAlive(data.pid)) {
         await unlink(filePath).catch(() => {});

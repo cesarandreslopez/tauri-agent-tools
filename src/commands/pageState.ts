@@ -1,5 +1,7 @@
 import { Command } from 'commander';
 import { addBridgeOptions, resolveBridge } from './shared.js';
+import { PageStateSchema } from '../schemas.js';
+import type { PageState } from '../schemas.js';
 
 const PAGE_STATE_SCRIPT = `(() => {
   var state = {
@@ -12,15 +14,6 @@ const PAGE_STATE_SCRIPT = `(() => {
   };
   return JSON.stringify(state);
 })()`;
-
-interface PageState {
-  url: string;
-  title: string;
-  viewport: { width: number; height: number };
-  scroll: { x: number; y: number };
-  document: { width: number; height: number };
-  hasTauri: boolean;
-}
 
 function formatPageState(state: PageState): string {
   const lines = [
@@ -44,7 +37,7 @@ export function registerPageState(program: Command): void {
   cmd.action(async (opts: { json?: boolean; port?: number; token?: string }) => {
     const bridge = await resolveBridge(opts);
     const raw = await bridge.eval(PAGE_STATE_SCRIPT);
-    const state: PageState = JSON.parse(String(raw));
+    const state = PageStateSchema.parse(JSON.parse(String(raw)));
 
     if (opts.json) {
       console.log(JSON.stringify(state, null, 2));
