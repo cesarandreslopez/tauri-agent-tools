@@ -8,11 +8,11 @@ import { discoverBridge } from '../bridge/tokenDiscovery.js';
  * Parse a value with a Zod enum schema, throwing a human-readable error on failure.
  * Replaces raw `.parse()` calls that would surface cryptic ZodError messages.
  */
-export function parseEnum<T extends Readonly<Record<string, string>>>(
+export function parseEnum<T extends [string, ...string[]]>(
   schema: z.ZodEnum<T>,
   value: string,
   label: string,
-): T[keyof T] {
+): T[number] {
   const result = schema.safeParse(value);
   if (!result.success) {
     throw new Error(`Invalid ${label}: ${value}. Must be one of: ${schema.options.join(', ')}`);
