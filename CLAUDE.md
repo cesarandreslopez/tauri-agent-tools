@@ -81,6 +81,47 @@ npx vitest run tests/commands/screenshot.test.ts
 4. Tag: `git tag v<version>` on `main`
 5. Publish: `npm publish`
 
+## Refactoring Status
+
+**Currently in Phase 2** of a modular refactoring. See `specs/refactor/` for plans and progress.
+
+**Goal:** Split monolithic `src/schemas.ts` (240 lines, 16 importers) into `src/schemas/` with 4 domain-focused files. All other modules stay structurally unchanged — only import paths update.
+
+### Code Map (Current → Target)
+
+| Current | Target | Change |
+|---------|--------|--------|
+| `src/schemas.ts` | `src/schemas/index.ts` (barrel) | Split into 4 domain files |
+| — | `src/schemas/bridge.ts` | Bridge protocol schemas |
+| — | `src/schemas/dom.ts` | DOM/a11y tree schemas |
+| — | `src/schemas/commands.ts` | CLI option/output schemas |
+| — | `src/schemas/platform.ts` | Platform-specific schemas |
+| `src/types.ts` | `src/types.ts` | Remove re-exports, keep interfaces |
+| `src/bridge/*` | `src/bridge/*` | Update import paths |
+| `src/commands/*` | `src/commands/*` | Update import paths |
+| `src/platform/*` | `src/platform/*` | Update import paths |
+| `src/util/*` | `src/util/*` | Update import paths |
+| `src/cli.ts` | `src/cli.ts` | Update import paths |
+
+### Refactoring Rules
+
+- Every PR must be under ~300 lines changed (excluding tests)
+- `npx tsc --noEmit` must pass after every commit
+- `npm test` must pass after every commit
+- `node scripts/check-imports.mjs` must pass (enforces dependency DAG)
+- `npx madge --circular --extensions ts,tsx src/` must show no new cycles
+- No new `any` types
+- Use the compatibility re-export pattern from `specs/refactor/re-export-template.md` when moving symbols
+
+### Safety Net Commands
+
+```bash
+npx tsc --noEmit                              # Type check
+npm test                                      # All tests
+node scripts/check-imports.mjs                # Import DAG linter
+npx madge --circular --extensions ts,tsx src/  # Circular dependency check
+```
+
 ## Agent Skills
 
 `.agents/skills/` contains two Agent Skills (agentskills.io format) that teach AI agents how to use this tool and set up the Rust bridge. These are shipped in the npm package.
