@@ -1,5 +1,5 @@
 import { execFile as cpExecFile } from 'node:child_process';
-import { WindowIdSchema } from '../schemas.js';
+import { WindowIdSchema } from '../schemas/platform.js';
 
 const MAX_BUFFER = 100 * 1024 * 1024; // 100MB
 
