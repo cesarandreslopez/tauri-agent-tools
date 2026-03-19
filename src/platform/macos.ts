@@ -51,7 +51,7 @@ async function normalizeRetina(filePath: string, logicalWidth: number): Promise<
   const match = stdout.toString().match(/pixelWidth:\s*(\d+)/);
   if (!match) return;
 
-  const pixelWidth = parseInt(match[1], 10);
+  const pixelWidth = parseInt(match[1]!, 10);
   if (pixelWidth > logicalWidth) {
     await exec('sips', ['--resampleWidth', String(logicalWidth), filePath]);
   }

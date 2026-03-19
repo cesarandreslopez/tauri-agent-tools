@@ -194,7 +194,7 @@ export function registerDom(program: Command): void {
         if (opts.json) {
           console.log(JSON.stringify(matches[0], null, 2));
         } else {
-          console.log(formatTreeLine(matches[0], 0));
+          console.log(formatTreeLine(matches[0]!, 0));
         }
         return;
       }

@@ -9,7 +9,7 @@ export class X11Adapter implements PlatformAdapter {
     if (ids.length === 0) {
       throw new Error(`No window found matching: ${title}`);
     }
-    return ids[0];
+    return ids[0]!;
   }
 
   async captureWindow(windowId: string, format: ImageFormat): Promise<Buffer> {
@@ -27,7 +27,7 @@ export class X11Adapter implements PlatformAdapter {
     const parse = (key: string): number => {
       const match = output.match(new RegExp(`${key}=(\\d+)`));
       if (!match) throw new Error(`Failed to parse ${key} from xdotool output`);
-      return parseInt(match[1], 10);
+      return parseInt(match[1]!, 10);
     };
 
     return {
@@ -64,7 +64,7 @@ export class X11Adapter implements PlatformAdapter {
         const geomOutput = geomResult.stdout.toString();
         const parse = (key: string): number => {
           const match = geomOutput.match(new RegExp(`${key}=(\\d+)`));
-          return match ? parseInt(match[1], 10) : 0;
+          return match ? parseInt(match[1]!, 10) : 0;
         };
 
         const pid = parseInt(pidResult.stdout.toString().trim(), 10);
