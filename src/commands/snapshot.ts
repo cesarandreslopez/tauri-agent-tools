@@ -5,7 +5,8 @@ import { addBridgeOptions, resolveBridge } from './shared.js';
 import { buildSerializerScript } from './dom.js';
 import { computeCropRect, cropImage } from '../util/image.js';
 import type { BridgeClient } from '../bridge/client.js';
-import { DomNodeSchema, PageStateSchema, SnapshotStorageResultSchema } from '../schemas.js';
+import { DomNodeSchema } from '../schemas/dom.js';
+import { PageStateSchema, SnapshotStorageResultSchema } from '../schemas/commands.js';
 
 const PAGE_STATE_SCRIPT = `(() => {
   return JSON.stringify({

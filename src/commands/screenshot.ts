@@ -1,7 +1,7 @@
 import { writeFile } from 'node:fs/promises';
 import { Command } from 'commander';
 import type { ImageFormat, PlatformAdapter } from '../types.js';
-import { ImageFormatSchema } from '../schemas.js';
+import { ImageFormatSchema } from '../schemas/commands.js';
 import { addBridgeOptions, resolveBridge } from './shared.js';
 import { computeCropRect, cropImage, resizeImage } from '../util/image.js';
 

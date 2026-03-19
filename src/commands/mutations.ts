@@ -2,8 +2,8 @@ import { Command } from 'commander';
 import { z } from 'zod';
 import { addBridgeOptions, resolveBridge } from './shared.js';
 import type { BridgeClient } from '../bridge/client.js';
-import { MutationEntrySchema } from '../schemas.js';
-import type { MutationEntry } from '../schemas.js';
+import { MutationEntrySchema } from '../schemas/commands.js';
+import type { MutationEntry } from '../schemas/commands.js';
 
 export type { MutationEntry };
 

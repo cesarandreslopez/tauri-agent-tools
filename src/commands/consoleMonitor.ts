@@ -2,8 +2,8 @@ import { Command } from 'commander';
 import { z } from 'zod';
 import { addBridgeOptions, resolveBridge } from './shared.js';
 import type { BridgeClient } from '../bridge/client.js';
-import { ConsoleEntrySchema, ConsoleLevelSchema } from '../schemas.js';
-import type { ConsoleEntry } from '../schemas.js';
+import { ConsoleEntrySchema, ConsoleLevelSchema } from '../schemas/commands.js';
+import type { ConsoleEntry } from '../schemas/commands.js';
 
 const PATCH_SCRIPT = `(() => {
   if (window.__tauriDevToolsConsolePatched) return 'already_patched';

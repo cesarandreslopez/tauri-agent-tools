@@ -1,8 +1,10 @@
 import { Command } from 'commander';
 import { z } from 'zod';
 import { addBridgeOptions, resolveBridge } from './shared.js';
-import { DomNodeSchema, A11yNodeSchema, DomModeSchema } from '../schemas.js';
-import type { DomNode, A11yNode, DomMode } from '../schemas.js';
+import { DomNodeSchema, A11yNodeSchema } from '../schemas/dom.js';
+import type { DomNode, A11yNode } from '../schemas/dom.js';
+import { DomModeSchema } from '../schemas/commands.js';
+import type { DomMode } from '../schemas/commands.js';
 
 function formatA11yLine(node: A11yNode, indent: number): string {
   let line = '  '.repeat(indent);

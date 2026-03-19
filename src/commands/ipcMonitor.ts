@@ -2,8 +2,8 @@ import { Command } from 'commander';
 import { z } from 'zod';
 import { addBridgeOptions, resolveBridge } from './shared.js';
 import type { BridgeClient } from '../bridge/client.js';
-import { IpcEntrySchema } from '../schemas.js';
-import type { IpcEntry } from '../schemas.js';
+import { IpcEntrySchema } from '../schemas/commands.js';
+import type { IpcEntry } from '../schemas/commands.js';
 
 const PATCH_SCRIPT = `(() => {
   if (window.__tauriDevToolsPatched) return 'already_patched';
