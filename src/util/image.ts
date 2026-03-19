@@ -1,4 +1,5 @@
-import type { ElementRect, ImageFormat } from '../types.js';
+import type { ElementRect } from '../schemas/bridge.js';
+import type { ImageFormat } from '../schemas/commands.js';
 import { exec } from './exec.js';
 
 export async function cropImage(

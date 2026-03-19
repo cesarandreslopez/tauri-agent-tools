@@ -1,4 +1,5 @@
-import type { ImageFormat, PlatformAdapter, WindowInfo } from '../types.js';
+import type { PlatformAdapter, WindowInfo } from '../types.js';
+import type { ImageFormat } from '../schemas/commands.js';
 import { exec, validateWindowId } from '../util/exec.js';
 
 export class X11Adapter implements PlatformAdapter {

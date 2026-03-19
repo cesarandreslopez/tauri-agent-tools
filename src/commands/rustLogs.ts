@@ -1,7 +1,7 @@
 import { Command } from 'commander';
 import { addBridgeOptions, resolveBridge } from './shared.js';
-import type { RustLogEntry } from '../types.js';
 import { RustLogLevelSchema } from '../schemas/bridge.js';
+import type { RustLogEntry } from '../schemas/bridge.js';
 
 function matchesLevel(entry: RustLogEntry, level?: string): boolean {
   if (!level) return true;

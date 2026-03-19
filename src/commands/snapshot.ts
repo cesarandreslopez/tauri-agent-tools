@@ -1,6 +1,7 @@
 import { writeFile } from 'node:fs/promises';
 import { Command } from 'commander';
-import type { PlatformAdapter, ImageFormat } from '../types.js';
+import type { PlatformAdapter } from '../types.js';
+import type { ImageFormat } from '../schemas/commands.js';
 import { addBridgeOptions, resolveBridge } from './shared.js';
 import { buildSerializerScript } from './dom.js';
 import { computeCropRect, cropImage } from '../util/image.js';

@@ -1,4 +1,4 @@
-import type { BridgeConfig } from '../types.js';
+import type { BridgeConfig } from '../schemas/bridge.js';
 import {
   ElementRectSchema,
   ViewportSizeSchema,

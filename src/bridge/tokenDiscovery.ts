@@ -1,6 +1,6 @@
 import { readdir, readFile, unlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import type { BridgeConfig } from '../types.js';
+import type { BridgeConfig } from '../schemas/bridge.js';
 import { TokenFileSchema } from '../schemas/bridge.js';
 
 const TOKEN_DIR = tmpdir();

@@ -27,27 +27,22 @@ const SRC_DIR = resolve(import.meta.dirname, '..', 'src');
 /**
  * Allowed imports for each module (directory or file).
  * Key format: directory name with trailing slash, or bare filename.
- *
- * During migration, both 'schemas.ts' (monolith) and 'schemas/' (split)
- * are accepted. Once migration completes, remove the 'schemas.ts' entry.
  */
 const ALLOWED_DEPS = {
   // Leaf — only external (zod)
   'schemas/':    [],
-  // schemas.ts (legacy monolith) — leaf during transition
-  'schemas.ts':  [],
 
-  'types.ts':    ['schemas/', 'schemas.ts'],
+  'types.ts':    ['schemas/'],
 
-  'util/':       ['schemas/', 'schemas.ts', 'types.ts'],
+  'util/':       ['schemas/', 'types.ts'],
 
-  'bridge/':     ['schemas/', 'schemas.ts', 'types.ts'],
+  'bridge/':     ['schemas/', 'types.ts'],
 
-  'platform/':   ['util/', 'schemas/', 'schemas.ts', 'types.ts'],
+  'platform/':   ['util/', 'schemas/', 'types.ts'],
 
-  'commands/':   ['bridge/', 'platform/', 'util/', 'schemas/', 'schemas.ts', 'types.ts'],
+  'commands/':   ['bridge/', 'platform/', 'util/', 'schemas/', 'types.ts'],
 
-  'cli.ts':      ['commands/', 'platform/', 'bridge/', 'schemas/', 'schemas.ts', 'types.ts'],
+  'cli.ts':      ['commands/', 'platform/', 'bridge/', 'schemas/', 'types.ts'],
 };
 
 // ─── Helpers ────────────────────────────────────────────────────────────────

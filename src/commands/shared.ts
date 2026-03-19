@@ -1,5 +1,5 @@
 import type { Command } from 'commander';
-import type { BridgeConfig } from '../types.js';
+import type { BridgeConfig } from '../schemas/bridge.js';
 import { BridgeClient } from '../bridge/client.js';
 import { discoverBridge } from '../bridge/tokenDiscovery.js';
 
