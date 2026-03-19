@@ -56,18 +56,18 @@ export interface DomNode {
   children?: DomNode[];
 }
 
-export const DomNodeSchema: z.ZodType<DomNode> = z.lazy(() =>
-  z.object({
-    tag: z.string(),
-    id: z.string().optional(),
-    classes: z.array(z.string()).optional(),
-    text: z.string().optional(),
-    rect: z.object({ width: z.number(), height: z.number() }).optional(),
-    attributes: z.record(z.string()).optional(),
-    styles: z.record(z.string()).optional(),
-    children: z.array(DomNodeSchema).optional(),
-  }),
-);
+export const DomNodeSchema: z.ZodType<DomNode> = z.object({
+  tag: z.string(),
+  id: z.string().optional(),
+  classes: z.array(z.string()).optional(),
+  text: z.string().optional(),
+  rect: z.object({ width: z.number(), height: z.number() }).optional(),
+  attributes: z.record(z.string(), z.string()).optional(),
+  styles: z.record(z.string(), z.string()).optional(),
+  get children(): z.ZodOptional<z.ZodArray<z.ZodType<DomNode>>> {
+    return z.array(DomNodeSchema).optional();
+  },
+});
 
 export interface A11yNode {
   role: string;
@@ -76,14 +76,14 @@ export interface A11yNode {
   children?: A11yNode[];
 }
 
-export const A11yNodeSchema: z.ZodType<A11yNode> = z.lazy(() =>
-  z.object({
-    role: z.string(),
-    name: z.string().optional(),
-    state: z.record(z.unknown()).optional(),
-    children: z.array(A11yNodeSchema).optional(),
-  }),
-);
+export const A11yNodeSchema: z.ZodType<A11yNode> = z.object({
+  role: z.string(),
+  name: z.string().optional(),
+  state: z.record(z.string(), z.unknown()).optional(),
+  get children(): z.ZodOptional<z.ZodArray<z.ZodType<A11yNode>>> {
+    return z.array(A11yNodeSchema).optional();
+  },
+});
 
 // === Storage ===
 
@@ -146,7 +146,7 @@ export type MutationEntry = z.infer<typeof MutationEntrySchema>;
 
 export const IpcEntrySchema = z.object({
   command: z.string(),
-  args: z.record(z.unknown()),
+  args: z.record(z.string(), z.unknown()),
   timestamp: z.number(),
   duration: z.number().optional(),
   result: z.unknown().optional(),
@@ -221,18 +221,20 @@ export interface SwayNode {
   floating_nodes?: SwayNode[];
 }
 
-export const SwayNodeSchema: z.ZodType<SwayNode> = z.lazy(() =>
-  z.object({
-    id: z.number(),
-    pid: z.number().optional(),
-    name: z.string().nullable(),
-    rect: z.object({
-      x: z.number(),
-      y: z.number(),
-      width: z.number(),
-      height: z.number(),
-    }),
-    nodes: z.array(SwayNodeSchema).optional(),
-    floating_nodes: z.array(SwayNodeSchema).optional(),
+export const SwayNodeSchema: z.ZodType<SwayNode> = z.object({
+  id: z.number(),
+  pid: z.number().optional(),
+  name: z.string().nullable(),
+  rect: z.object({
+    x: z.number(),
+    y: z.number(),
+    width: z.number(),
+    height: z.number(),
   }),
-);
+  get nodes(): z.ZodOptional<z.ZodArray<z.ZodType<SwayNode>>> {
+    return z.array(SwayNodeSchema).optional();
+  },
+  get floating_nodes(): z.ZodOptional<z.ZodArray<z.ZodType<SwayNode>>> {
+    return z.array(SwayNodeSchema).optional();
+  },
+});
