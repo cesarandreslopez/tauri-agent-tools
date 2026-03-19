@@ -1,7 +1,8 @@
 import { writeFile } from 'node:fs/promises';
 import { Command } from 'commander';
-import type { ImageFormat, PlatformAdapter } from '../types.js';
-import { ImageFormatSchema } from '../schemas.js';
+import type { PlatformAdapter } from '../types.js';
+import { ImageFormatSchema } from '../schemas/commands.js';
+import type { ImageFormat } from '../schemas/commands.js';
 import { addBridgeOptions, resolveBridge } from './shared.js';
 import { computeCropRect, cropImage, resizeImage } from '../util/image.js';
 
@@ -21,7 +22,12 @@ export function registerScreenshot(
     .option('-o, --output <path>', 'Output file path (default: auto-named)')
     .option('--format <fmt>', 'Output format: png or jpg', 'png')
     .option('--max-width <number>', 'Resize to max width', parseInt)
-    .option('--json', 'Output structured JSON metadata');
+    .option('--json', 'Output structured JSON metadata')
+    .addHelpText('after', `
+Examples:
+  $ tauri-agent-tools screenshot --title "My App"
+  $ tauri-agent-tools screenshot --selector ".sidebar" --output sidebar.png
+  $ tauri-agent-tools screenshot --selector "#login" --format jpg --json`);
 
   addBridgeOptions(cmd);
 
@@ -35,7 +41,11 @@ export function registerScreenshot(
     port?: number;
     token?: string;
   }) => {
-    const format = ImageFormatSchema.catch('png').parse(opts.format);
+    const formatResult = ImageFormatSchema.safeParse(opts.format);
+    if (!formatResult.success) {
+      throw new Error(`Invalid format: ${opts.format}. Must be one of: ${ImageFormatSchema.options.join(', ')}`);
+    }
+    const format = formatResult.data;
     const adapter = await getAdapter();
 
     let buffer: Buffer;

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { WindowInfo, BridgeConfig } from '../../src/types.js';
+import type { WindowInfo } from '../../src/types.js';
+import type { BridgeConfig } from '../../src/schemas/bridge.js';
 
 vi.mock('../../src/bridge/tokenDiscovery.js', () => ({
   discoverBridgesByPid: vi.fn(),

@@ -77,7 +77,7 @@ export function registerDiff(program: Command): void {
       const msg = err instanceof Error ? err.message : String(err);
       const match = msg.match(/(\d+)/);
       if (match) {
-        pixelsDifferent = parseInt(match[1], 10);
+        pixelsDifferent = parseInt(match[1]!, 10);
       } else {
         throw err;
       }

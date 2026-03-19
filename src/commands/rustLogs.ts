@@ -1,7 +1,7 @@
 import { Command } from 'commander';
-import { addBridgeOptions, resolveBridge } from './shared.js';
-import type { RustLogEntry } from '../types.js';
-import { RustLogLevelSchema } from '../schemas.js';
+import { addBridgeOptions, resolveBridge, parseEnum } from './shared.js';
+import { RustLogLevelSchema } from '../schemas/bridge.js';
+import type { RustLogEntry } from '../schemas/bridge.js';
 
 function matchesLevel(entry: RustLogEntry, level?: string): boolean {
   if (!level) return true;
@@ -12,10 +12,12 @@ function matchesLevel(entry: RustLogEntry, level?: string): boolean {
   return entryLevel >= threshold;
 }
 
-function matchesTarget(entry: RustLogEntry, target?: string): boolean {
-  if (!target) return true;
-  const regex = new RegExp(target);
-  return regex.test(entry.target);
+function compileRegex(pattern: string, label: string): RegExp {
+  try {
+    return new RegExp(pattern);
+  } catch {
+    throw new Error(`Invalid ${label} regex: ${pattern}`);
+  }
 }
 
 function matchesSource(entry: RustLogEntry, source?: string): boolean {
@@ -23,12 +25,6 @@ function matchesSource(entry: RustLogEntry, source?: string): boolean {
   if (source === 'rust') return entry.source === 'rust';
   if (source === 'sidecar') return entry.source.startsWith('sidecar:');
   return entry.source === source;
-}
-
-function matchesTextFilter(message: string, filter?: string): boolean {
-  if (!filter) return true;
-  const regex = new RegExp(filter);
-  return regex.test(message);
 }
 
 function formatLogEntry(entry: RustLogEntry): string {
@@ -65,8 +61,11 @@ export function registerRustLogs(program: Command): void {
     token?: string;
   }) => {
     if (opts.level) {
-      RustLogLevelSchema.parse(opts.level);
+      parseEnum(RustLogLevelSchema, opts.level, 'level');
     }
+
+    const targetRegex = opts.target ? compileRegex(opts.target, 'target') : undefined;
+    const filterRegex = opts.filter ? compileRegex(opts.filter, 'filter') : undefined;
 
     const bridge = await resolveBridge(opts);
 
@@ -98,9 +97,9 @@ export function registerRustLogs(program: Command): void {
 
         for (const entry of entries) {
           if (!matchesLevel(entry, opts.level)) continue;
-          if (!matchesTarget(entry, opts.target)) continue;
+          if (targetRegex && !targetRegex.test(entry.target)) continue;
           if (!matchesSource(entry, opts.source)) continue;
-          if (!matchesTextFilter(entry.message, opts.filter)) continue;
+          if (filterRegex && !filterRegex.test(entry.message)) continue;
 
           if (opts.json) {
             console.log(JSON.stringify(entry));

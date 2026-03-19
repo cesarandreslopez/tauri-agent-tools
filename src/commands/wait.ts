@@ -16,7 +16,13 @@ export function registerWait(
     .option('-e, --eval <js>', 'Wait for JS expression to be truthy')
     .option('-t, --title <regex>', 'Wait for window with title (no bridge needed)')
     .option('--timeout <ms>', 'Maximum wait time in milliseconds', parseInt, 10000)
-    .option('--interval <ms>', 'Polling interval in milliseconds', parseInt, 500);
+    .option('--interval <ms>', 'Polling interval in milliseconds', parseInt, 500)
+    .option('--json', 'Output structured JSON result')
+    .addHelpText('after', `
+Examples:
+  $ tauri-agent-tools wait --title "My App" --timeout 5000
+  $ tauri-agent-tools wait --selector ".loaded" --json
+  $ tauri-agent-tools wait --eval "window.appReady === true"`);
 
   addBridgeOptions(cmd);
 
@@ -26,6 +32,7 @@ export function registerWait(
     title?: string;
     timeout: number;
     interval: number;
+    json?: boolean;
     port?: number;
     token?: string;
   }) => {
@@ -33,7 +40,8 @@ export function registerWait(
       throw new Error('One of --selector, --eval, or --title is required');
     }
 
-    const deadline = Date.now() + opts.timeout;
+    const start = Date.now();
+    const deadline = start + opts.timeout;
 
     if (opts.title) {
       // No bridge needed — poll platform adapter
@@ -41,7 +49,11 @@ export function registerWait(
       while (Date.now() < deadline) {
         try {
           const windowId = await adapter.findWindow(opts.title);
-          console.log(windowId);
+          if (opts.json) {
+            console.log(JSON.stringify({ matched: true, mode: 'title', windowId, elapsed: Date.now() - start }));
+          } else {
+            console.log(windowId);
+          }
           return;
         } catch {
           await sleep(opts.interval);
@@ -60,7 +72,11 @@ export function registerWait(
           `document.querySelector('${escaped}') !== null`,
         );
         if (result === true) {
-          console.log('found');
+          if (opts.json) {
+            console.log(JSON.stringify({ matched: true, mode: 'selector', selector: opts.selector, elapsed: Date.now() - start }));
+          } else {
+            console.log('found');
+          }
           return;
         }
         await sleep(opts.interval);
@@ -72,7 +88,11 @@ export function registerWait(
       while (Date.now() < deadline) {
         const result = await bridge.eval(opts.eval);
         if (result) {
-          console.log(JSON.stringify(result));
+          if (opts.json) {
+            console.log(JSON.stringify({ matched: true, mode: 'eval', result, elapsed: Date.now() - start }));
+          } else {
+            console.log(JSON.stringify(result));
+          }
           return;
         }
         await sleep(opts.interval);

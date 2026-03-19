@@ -1,6 +1,5 @@
-export type { ElementRect, BridgeConfig, RustLogEntry } from './schemas.js';
-import type { ImageFormat } from './schemas.js';
-export type { ImageFormat };
+import type { ImageFormat } from './schemas/commands.js';
+import type { BridgeConfig } from './schemas/bridge.js';
 
 export interface WindowInfo {
   windowId: string;
@@ -24,5 +23,5 @@ export interface PlatformAdapter {
 
 export interface WindowListEntry extends WindowInfo {
   tauri: boolean;
-  bridge?: import('./schemas.js').BridgeConfig;
+  bridge?: BridgeConfig;
 }

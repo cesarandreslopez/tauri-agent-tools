@@ -37,9 +37,17 @@ describe('Console Monitor', () => {
   });
 
   describe('text filter matching', () => {
+    function compileRegex(pattern: string, label: string): RegExp {
+      try {
+        return new RegExp(pattern);
+      } catch {
+        throw new Error(`Invalid ${label} regex: ${pattern}`);
+      }
+    }
+
     function matchesTextFilter(message: string, filter?: string): boolean {
       if (!filter) return true;
-      const regex = new RegExp(filter);
+      const regex = compileRegex(filter, 'filter');
       return regex.test(message);
     }
 
@@ -59,6 +67,10 @@ describe('Console Monitor', () => {
 
     it('matches partial text', () => {
       expect(matchesTextFilter('error: something went wrong', 'error')).toBe(true);
+    });
+
+    it('throws on invalid regex', () => {
+      expect(() => compileRegex('[invalid', 'filter')).toThrow('Invalid filter regex: [invalid');
     });
   });
 

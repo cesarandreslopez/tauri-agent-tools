@@ -2,10 +2,11 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { z } from 'zod';
-import type { ImageFormat, PlatformAdapter, WindowInfo } from '../types.js';
+import type { PlatformAdapter, WindowInfo } from '../types.js';
+import type { ImageFormat } from '../schemas/commands.js';
 import { exec, validateWindowId } from '../util/exec.js';
-import { CGWindowInfoSchema } from '../schemas.js';
-import type { CGWindowInfo } from '../schemas.js';
+import { CGWindowInfoSchema } from '../schemas/platform.js';
+import type { CGWindowInfo } from '../schemas/platform.js';
 
 async function runJxa(script: string): Promise<string> {
   const { stdout } = await exec('osascript', ['-l', 'JavaScript', '-e', script]);
@@ -50,7 +51,7 @@ async function normalizeRetina(filePath: string, logicalWidth: number): Promise<
   const match = stdout.toString().match(/pixelWidth:\s*(\d+)/);
   if (!match) return;
 
-  const pixelWidth = parseInt(match[1], 10);
+  const pixelWidth = parseInt(match[1]!, 10);
   if (pixelWidth > logicalWidth) {
     await exec('sips', ['--resampleWidth', String(logicalWidth), filePath]);
   }

@@ -45,11 +45,19 @@ describe('IPC Monitor', () => {
   });
 
   describe('filter matching', () => {
+    function escapeRegExp(s: string): string {
+      return s.replace(/[.+?^${}()|[\]\\]/g, '\\$&');
+    }
+
+    function compileWildcardFilter(filter: string): RegExp | null {
+      if (!filter.includes('*')) return null;
+      const pattern = '^' + filter.split('*').map(escapeRegExp).join('.*') + '$';
+      return new RegExp(pattern);
+    }
+
     function matchesFilter(command: string, filter: string): boolean {
-      if (filter.includes('*')) {
-        const regex = new RegExp('^' + filter.replace(/\*/g, '.*') + '$');
-        return regex.test(command);
-      }
+      const regex = compileWildcardFilter(filter);
+      if (regex) return regex.test(command);
       return command === filter;
     }
 
@@ -68,6 +76,11 @@ describe('IPC Monitor', () => {
       expect(matchesFilter('plugin:fs|read', 'plugin:*')).toBe(true);
       expect(matchesFilter('plugin:fs|read', '*read')).toBe(true);
       expect(matchesFilter('get_data', '*data*')).toBe(true);
+    });
+
+    it('escapes regex special characters in non-wildcard parts', () => {
+      expect(matchesFilter('plugin:fs|read', 'plugin:fs|*')).toBe(true);
+      expect(matchesFilter('plugin:http|get', 'plugin:fs|*')).toBe(false);
     });
   });
 

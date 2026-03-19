@@ -1,7 +1,7 @@
 import { Command } from 'commander';
 import { addBridgeOptions, resolveBridge } from './shared.js';
-import { PageStateSchema } from '../schemas.js';
-import type { PageState } from '../schemas.js';
+import { PageStateSchema } from '../schemas/commands.js';
+import type { PageState } from '../schemas/commands.js';
 
 const PAGE_STATE_SCRIPT = `(() => {
   var state = {

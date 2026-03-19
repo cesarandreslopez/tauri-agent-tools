@@ -1,9 +1,9 @@
 import { Command } from 'commander';
 import { z } from 'zod';
-import { addBridgeOptions, resolveBridge } from './shared.js';
+import { addBridgeOptions, resolveBridge, parseEnum } from './shared.js';
 import type { BridgeClient } from '../bridge/client.js';
-import { ConsoleEntrySchema, ConsoleLevelSchema } from '../schemas.js';
-import type { ConsoleEntry } from '../schemas.js';
+import { ConsoleEntrySchema, ConsoleLevelSchema } from '../schemas/commands.js';
+import type { ConsoleEntry } from '../schemas/commands.js';
 
 const PATCH_SCRIPT = `(() => {
   if (window.__tauriDevToolsConsolePatched) return 'already_patched';
@@ -56,10 +56,12 @@ function matchesLevel(entry: ConsoleEntry, level?: string): boolean {
   return entry.level === level;
 }
 
-function matchesTextFilter(message: string, filter?: string): boolean {
-  if (!filter) return true;
-  const regex = new RegExp(filter);
-  return regex.test(message);
+function compileRegex(pattern: string, label: string): RegExp {
+  try {
+    return new RegExp(pattern);
+  } catch {
+    throw new Error(`Invalid ${label} regex: ${pattern}`);
+  }
 }
 
 function formatConsoleEntry(entry: ConsoleEntry): string {
@@ -96,8 +98,10 @@ export function registerConsoleMonitor(program: Command): void {
     token?: string;
   }) => {
     if (opts.level) {
-      ConsoleLevelSchema.parse(opts.level);
+      parseEnum(ConsoleLevelSchema, opts.level, 'level');
     }
+
+    const filterRegex = opts.filter ? compileRegex(opts.filter, 'filter') : undefined;
 
     const bridge = await resolveBridge(opts);
 
@@ -135,7 +139,7 @@ export function registerConsoleMonitor(program: Command): void {
 
         for (const entry of entries) {
           if (!matchesLevel(entry, opts.level)) continue;
-          if (!matchesTextFilter(entry.message, opts.filter)) continue;
+          if (filterRegex && !filterRegex.test(entry.message)) continue;
 
           if (opts.json) {
             console.log(JSON.stringify(entry));

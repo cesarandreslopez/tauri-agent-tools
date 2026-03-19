@@ -1,8 +1,8 @@
 import { Command } from 'commander';
 import { z } from 'zod';
 import { addBridgeOptions, resolveBridge } from './shared.js';
-import { StorageEntrySchema, StorageTypeSchema } from '../schemas.js';
-import type { StorageEntry, StorageType } from '../schemas.js';
+import { StorageEntrySchema, StorageTypeSchema } from '../schemas/commands.js';
+import type { StorageEntry, StorageType } from '../schemas/commands.js';
 
 function escapeQuotes(s: string): string {
   return s.replace(/\\/g, '\\\\').replace(/'/g, "\\'");

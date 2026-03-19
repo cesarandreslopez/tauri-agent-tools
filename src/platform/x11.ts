@@ -1,5 +1,15 @@
-import type { ImageFormat, PlatformAdapter, WindowInfo } from '../types.js';
+import type { PlatformAdapter, WindowInfo } from '../types.js';
+import type { ImageFormat } from '../schemas/commands.js';
 import { exec, validateWindowId } from '../util/exec.js';
+
+function parseShellVar(output: string, key: string, fallback?: number): number {
+  const match = output.match(new RegExp(`${key}=(\\d+)`));
+  if (!match) {
+    if (fallback !== undefined) return fallback;
+    throw new Error(`Failed to parse ${key} from xdotool output`);
+  }
+  return parseInt(match[1]!, 10);
+}
 
 export class X11Adapter implements PlatformAdapter {
   async findWindow(title: string): Promise<string> {
@@ -8,7 +18,7 @@ export class X11Adapter implements PlatformAdapter {
     if (ids.length === 0) {
       throw new Error(`No window found matching: ${title}`);
     }
-    return ids[0];
+    return ids[0]!;
   }
 
   async captureWindow(windowId: string, format: ImageFormat): Promise<Buffer> {
@@ -23,18 +33,12 @@ export class X11Adapter implements PlatformAdapter {
     const { stdout } = await exec('xdotool', ['getwindowgeometry', '--shell', windowId]);
     const output = stdout.toString();
 
-    const parse = (key: string): number => {
-      const match = output.match(new RegExp(`${key}=(\\d+)`));
-      if (!match) throw new Error(`Failed to parse ${key} from xdotool output`);
-      return parseInt(match[1], 10);
-    };
-
     return {
       windowId,
-      x: parse('X'),
-      y: parse('Y'),
-      width: parse('WIDTH'),
-      height: parse('HEIGHT'),
+      x: parseShellVar(output, 'X'),
+      y: parseShellVar(output, 'Y'),
+      width: parseShellVar(output, 'WIDTH'),
+      height: parseShellVar(output, 'HEIGHT'),
     };
   }
 
@@ -61,21 +65,16 @@ export class X11Adapter implements PlatformAdapter {
         if (!name) continue;
 
         const geomOutput = geomResult.stdout.toString();
-        const parse = (key: string): number => {
-          const match = geomOutput.match(new RegExp(`${key}=(\\d+)`));
-          return match ? parseInt(match[1], 10) : 0;
-        };
-
         const pid = parseInt(pidResult.stdout.toString().trim(), 10);
 
         windows.push({
           windowId: id,
           pid: isNaN(pid) ? undefined : pid,
           name,
-          x: parse('X'),
-          y: parse('Y'),
-          width: parse('WIDTH'),
-          height: parse('HEIGHT'),
+          x: parseShellVar(geomOutput, 'X', 0),
+          y: parseShellVar(geomOutput, 'Y', 0),
+          width: parseShellVar(geomOutput, 'WIDTH', 0),
+          height: parseShellVar(geomOutput, 'HEIGHT', 0),
         });
       } catch {
         // Skip windows that disappeared or can't be queried

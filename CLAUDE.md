@@ -25,7 +25,8 @@ npx vitest run tests/commands/screenshot.test.ts
 | Location | Purpose |
 |----------|---------|
 | `src/cli.ts` | Entry point — registers all 15 commands via `commander` |
-| `src/types.ts` | Shared types: `WindowInfo`, `ElementRect`, `BridgeConfig`, `PlatformAdapter`, `DisplayServer`, `RustLogEntry` |
+| `src/schemas/` | Zod schemas split by domain: `bridge.ts`, `dom.ts`, `commands.ts`, `platform.ts` |
+| `src/types.ts` | Pure interfaces: `WindowInfo`, `PlatformAdapter`, `DisplayServer`, `WindowListEntry` |
 | `src/commands/` | One file per command (`screenshot.ts`, `dom.ts`, `eval.ts`, `wait.ts`, `info.ts`, `listWindows.ts`, `ipcMonitor.ts`, `consoleMonitor.ts`, `rustLogs.ts`, `storage.ts`, `pageState.ts`, `diff.ts`, `mutations.ts`, `snapshot.ts`) |
 | `src/commands/shared.ts` | `addBridgeOptions()` and `resolveBridge()` — shared bridge option wiring |
 | `src/platform/detect.ts` | `detectDisplayServer()` and `ensureTools()` — runtime platform detection |
@@ -61,7 +62,7 @@ npx vitest run tests/commands/screenshot.test.ts
 - **Security:** Uses `execFile()` with array args everywhere — never `exec()` with shell strings. Window IDs validated with `/^\d+$/` before use.
 - **No write operations:** No input injection, no state modification. This is a deliberate design choice, not a limitation.
 - **Node >=20 required:** Uses native `fetch()` (no HTTP library dependency).
-- **TypeScript strict mode** with declarations generated to `dist/`.
+- **TypeScript strict mode** with `noUncheckedIndexedAccess`, `noImplicitReturns`, `noFallthroughCasesInSwitch` enabled. Declarations generated to `dist/`.
 - **Tests use vitest globals:** `describe`, `it`, `expect` available without imports.
 
 ## Conventions
@@ -80,6 +81,38 @@ npx vitest run tests/commands/screenshot.test.ts
 3. Commit: `chore: release v<version>`
 4. Tag: `git tag v<version>` on `main`
 5. Publish: `npm publish`
+
+## Module Dependency DAG
+
+```
+cli.ts ──────────────────────────────┐
+  │                                  │
+  ├──→ commands/ ──┬──→ bridge/ ─────┤
+  │                │                 │
+  ├──→ platform/ ──┤                 │
+  │                │                 │
+  │                └──→ util/ ───────┤
+  │                                  │
+  └──────────────────────→ schemas/ ◄┘
+                           types.ts ◄── schemas/
+```
+
+Dependencies flow strictly downward. Enforced by `scripts/check-imports.mjs`.
+
+### Import Conventions
+
+- Import schemas from their **domain file** directly: `import { BridgeConfigSchema } from '../schemas/bridge.js'`
+- `types.ts` contains only pure interfaces (`WindowInfo`, `PlatformAdapter`, `DisplayServer`, `WindowListEntry`)
+- Schema types used in interfaces are imported via `import type` from schemas/
+
+### Safety Net Commands
+
+```bash
+npx tsc --noEmit                              # Type check
+npm test                                      # All tests (309 tests, 28 files)
+node scripts/check-imports.mjs                # Import DAG linter
+npx madge --circular --extensions ts,tsx src/  # Circular dependency check
+```
 
 ## Agent Skills
 

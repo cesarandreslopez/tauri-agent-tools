@@ -1,12 +1,13 @@
-import type { BridgeConfig } from '../types.js';
+import type { BridgeConfig } from '../schemas/bridge.js';
 import {
   ElementRectSchema,
   ViewportSizeSchema,
-  A11yNodeSchema,
   BridgeEvalResponseSchema,
   BridgeLogsResponseSchema,
-} from '../schemas.js';
-import type { ElementRect, RustLogEntry, A11yNode } from '../schemas.js';
+} from '../schemas/bridge.js';
+import type { ElementRect, RustLogEntry } from '../schemas/bridge.js';
+import { A11yNodeSchema } from '../schemas/dom.js';
+import type { A11yNode } from '../schemas/dom.js';
 
 export class BridgeClient {
   private baseUrl: string;

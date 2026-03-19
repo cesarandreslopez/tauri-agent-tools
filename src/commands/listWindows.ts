@@ -9,7 +9,11 @@ export function registerListWindows(
   const cmd = new Command('list-windows')
     .description('List all visible windows, marking Tauri apps')
     .option('--json', 'Output as JSON')
-    .option('--tauri', 'Only show Tauri app windows');
+    .option('--tauri', 'Only show Tauri app windows')
+    .addHelpText('after', `
+Examples:
+  $ tauri-agent-tools list-windows
+  $ tauri-agent-tools list-windows --tauri --json`);
 
   cmd.action(async (opts: { json?: boolean; tauri?: boolean }) => {
     const adapter = await getAdapter();

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { PlatformAdapter, WindowInfo, ImageFormat } from '../../src/types.js';
+import type { PlatformAdapter, WindowInfo } from '../../src/types.js';
+import type { ImageFormat } from '../../src/schemas/commands.js';
 
 vi.mock('../../src/bridge/tokenDiscovery.js', () => ({
   discoverBridge: vi.fn().mockResolvedValue({ port: 9999, token: 'test' }),

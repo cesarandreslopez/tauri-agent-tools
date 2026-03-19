@@ -1,11 +1,13 @@
 import { writeFile } from 'node:fs/promises';
 import { Command } from 'commander';
-import type { PlatformAdapter, ImageFormat } from '../types.js';
+import type { PlatformAdapter } from '../types.js';
+import type { ImageFormat } from '../schemas/commands.js';
 import { addBridgeOptions, resolveBridge } from './shared.js';
 import { buildSerializerScript } from './dom.js';
 import { computeCropRect, cropImage } from '../util/image.js';
 import type { BridgeClient } from '../bridge/client.js';
-import { DomNodeSchema, PageStateSchema, SnapshotStorageResultSchema } from '../schemas.js';
+import { DomNodeSchema } from '../schemas/dom.js';
+import { PageStateSchema, SnapshotStorageResultSchema } from '../schemas/commands.js';
 
 const PAGE_STATE_SCRIPT = `(() => {
   return JSON.stringify({
@@ -140,8 +142,10 @@ export function registerSnapshot(
     if (opts.json) {
       console.log(JSON.stringify(files, null, 2));
     } else {
-      for (const [key, path] of Object.entries(files)) {
-        console.log(`${key}: ${path}`);
+      for (const [key, value] of Object.entries(files)) {
+        const isError = value.startsWith('error: ');
+        const prefix = isError ? 'FAIL' : '  OK';
+        console.log(`[${prefix}] ${key}: ${value}`);
       }
     }
   });

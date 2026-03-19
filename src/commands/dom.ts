@@ -1,8 +1,10 @@
 import { Command } from 'commander';
 import { z } from 'zod';
-import { addBridgeOptions, resolveBridge } from './shared.js';
-import { DomNodeSchema, A11yNodeSchema, DomModeSchema } from '../schemas.js';
-import type { DomNode, A11yNode, DomMode } from '../schemas.js';
+import { addBridgeOptions, resolveBridge, parseEnum } from './shared.js';
+import { DomNodeSchema, A11yNodeSchema } from '../schemas/dom.js';
+import type { DomNode, A11yNode } from '../schemas/dom.js';
+import { DomModeSchema } from '../schemas/commands.js';
+import type { DomMode } from '../schemas/commands.js';
 
 function formatA11yLine(node: A11yNode, indent: number): string {
   let line = '  '.repeat(indent);
@@ -128,7 +130,13 @@ export function registerDom(program: Command): void {
     .option('--text <pattern>', 'Find elements containing this text (case-insensitive)')
     .option('--count', 'Just output match count')
     .option('--first', 'Only return first match')
-    .option('--json', 'Full structured JSON output');
+    .option('--json', 'Full structured JSON output')
+    .addHelpText('after', `
+Examples:
+  $ tauri-agent-tools dom ".sidebar"
+  $ tauri-agent-tools dom "#app" --depth 5 --json
+  $ tauri-agent-tools dom --text "Submit" --first
+  $ tauri-agent-tools dom body --mode accessibility`);
 
   addBridgeOptions(cmd);
 
@@ -145,7 +153,12 @@ export function registerDom(program: Command): void {
     port?: number;
     token?: string;
   }) => {
-    const mode = DomModeSchema.parse(opts.mode);
+    const mode = parseEnum(DomModeSchema, opts.mode, 'mode');
+    if (opts.selector && selectorArg !== 'body' && opts.selector !== selectorArg) {
+      throw new Error(
+        `Conflicting selectors: positional "${selectorArg}" vs --selector "${opts.selector}". Use one or the other.`,
+      );
+    }
     const selector = opts.selector ?? selectorArg;
     const bridge = await resolveBridge(opts);
 
@@ -192,7 +205,7 @@ export function registerDom(program: Command): void {
         if (opts.json) {
           console.log(JSON.stringify(matches[0], null, 2));
         } else {
-          console.log(formatTreeLine(matches[0], 0));
+          console.log(formatTreeLine(matches[0]!, 0));
         }
         return;
       }

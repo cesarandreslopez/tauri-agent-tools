@@ -71,10 +71,17 @@ describe('Rust Logs', () => {
   });
 
   describe('target filtering', () => {
-    function matchesTarget(entry: RustLogEntry, target?: string): boolean {
-      if (!target) return true;
-      const regex = new RegExp(target);
-      return regex.test(entry.target);
+    function compileRegex(pattern: string, label: string): RegExp {
+      try {
+        return new RegExp(pattern);
+      } catch {
+        throw new Error(`Invalid ${label} regex: ${pattern}`);
+      }
+    }
+
+    function matchesTarget(entry: RustLogEntry, targetRegex?: RegExp): boolean {
+      if (!targetRegex) return true;
+      return targetRegex.test(entry.target);
     }
 
     const makeEntry = (target: string): RustLogEntry => ({
@@ -90,16 +97,20 @@ describe('Rust Logs', () => {
     });
 
     it('matches exact module path', () => {
-      expect(matchesTarget(makeEntry('myapp::db'), 'myapp::db')).toBe(true);
+      expect(matchesTarget(makeEntry('myapp::db'), compileRegex('myapp::db', 'target'))).toBe(true);
     });
 
     it('matches regex pattern against module path', () => {
-      expect(matchesTarget(makeEntry('myapp::db::pool'), 'myapp::db')).toBe(true);
-      expect(matchesTarget(makeEntry('myapp::api::handler'), 'api')).toBe(true);
+      expect(matchesTarget(makeEntry('myapp::db::pool'), compileRegex('myapp::db', 'target'))).toBe(true);
+      expect(matchesTarget(makeEntry('myapp::api::handler'), compileRegex('api', 'target'))).toBe(true);
     });
 
     it('rejects non-matching module path', () => {
-      expect(matchesTarget(makeEntry('myapp::db'), 'api')).toBe(false);
+      expect(matchesTarget(makeEntry('myapp::db'), compileRegex('api', 'target'))).toBe(false);
+    });
+
+    it('throws on invalid regex', () => {
+      expect(() => compileRegex('[invalid', 'target')).toThrow('Invalid target regex: [invalid');
     });
   });
 
@@ -147,10 +158,17 @@ describe('Rust Logs', () => {
   });
 
   describe('text filter matching', () => {
-    function matchesTextFilter(message: string, filter?: string): boolean {
-      if (!filter) return true;
-      const regex = new RegExp(filter);
-      return regex.test(message);
+    function compileRegex(pattern: string, label: string): RegExp {
+      try {
+        return new RegExp(pattern);
+      } catch {
+        throw new Error(`Invalid ${label} regex: ${pattern}`);
+      }
+    }
+
+    function matchesTextFilter(message: string, filterRegex?: RegExp): boolean {
+      if (!filterRegex) return true;
+      return filterRegex.test(message);
     }
 
     it('matches when no filter is set', () => {
@@ -158,11 +176,15 @@ describe('Rust Logs', () => {
     });
 
     it('matches regex pattern', () => {
-      expect(matchesTextFilter('database connection failed', 'connection.*failed')).toBe(true);
+      expect(matchesTextFilter('database connection failed', compileRegex('connection.*failed', 'filter'))).toBe(true);
     });
 
     it('rejects non-matching pattern', () => {
-      expect(matchesTextFilter('database connected', 'connection.*failed')).toBe(false);
+      expect(matchesTextFilter('database connected', compileRegex('connection.*failed', 'filter'))).toBe(false);
+    });
+
+    it('throws on invalid regex', () => {
+      expect(() => compileRegex('[invalid', 'filter')).toThrow('Invalid filter regex: [invalid');
     });
   });
 

@@ -1,7 +1,24 @@
 import type { Command } from 'commander';
-import type { BridgeConfig } from '../types.js';
+import type { z } from 'zod';
+import type { BridgeConfig } from '../schemas/bridge.js';
 import { BridgeClient } from '../bridge/client.js';
 import { discoverBridge } from '../bridge/tokenDiscovery.js';
+
+/**
+ * Parse a value with a Zod enum schema, throwing a human-readable error on failure.
+ * Replaces raw `.parse()` calls that would surface cryptic ZodError messages.
+ */
+export function parseEnum<T extends [string, ...string[]]>(
+  schema: z.ZodEnum<T>,
+  value: string,
+  label: string,
+): T[number] {
+  const result = schema.safeParse(value);
+  if (!result.success) {
+    throw new Error(`Invalid ${label}: ${value}. Must be one of: ${schema.options.join(', ')}`);
+  }
+  return result.data;
+}
 
 export function addBridgeOptions(cmd: Command): Command {
   return cmd

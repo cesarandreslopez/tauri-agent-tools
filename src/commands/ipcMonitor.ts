@@ -2,8 +2,8 @@ import { Command } from 'commander';
 import { z } from 'zod';
 import { addBridgeOptions, resolveBridge } from './shared.js';
 import type { BridgeClient } from '../bridge/client.js';
-import { IpcEntrySchema } from '../schemas.js';
-import type { IpcEntry } from '../schemas.js';
+import { IpcEntrySchema } from '../schemas/commands.js';
+import type { IpcEntry } from '../schemas/commands.js';
 
 const PATCH_SCRIPT = `(() => {
   if (window.__tauriDevToolsPatched) return 'already_patched';
@@ -47,12 +47,14 @@ const CLEANUP_SCRIPT = `(() => {
   return 'cleaned';
 })()`;
 
-function matchesFilter(command: string, filter: string): boolean {
-  if (filter.includes('*')) {
-    const regex = new RegExp('^' + filter.replace(/\*/g, '.*') + '$');
-    return regex.test(command);
-  }
-  return command === filter;
+function escapeRegExp(s: string): string {
+  return s.replace(/[.+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function compileWildcardFilter(filter: string): RegExp | null {
+  if (!filter.includes('*')) return null;
+  const pattern = '^' + filter.split('*').map(escapeRegExp).join('.*') + '$';
+  return new RegExp(pattern);
 }
 
 function formatEntry(entry: IpcEntry): string {
@@ -88,6 +90,8 @@ export function registerIpcMonitor(program: Command): void {
     port?: number;
     token?: string;
   }) => {
+    const filterRegex = opts.filter ? compileWildcardFilter(opts.filter) : null;
+
     const bridge = await resolveBridge(opts);
 
     // Inject the monkey-patch
@@ -126,7 +130,13 @@ export function registerIpcMonitor(program: Command): void {
         const entries = z.array(IpcEntrySchema).parse(JSON.parse(String(raw)));
 
         for (const entry of entries) {
-          if (opts.filter && !matchesFilter(entry.command, opts.filter)) continue;
+          if (opts.filter) {
+            if (filterRegex) {
+              if (!filterRegex.test(entry.command)) continue;
+            } else if (entry.command !== opts.filter) {
+              continue;
+            }
+          }
 
           if (opts.json) {
             console.log(JSON.stringify(entry));

@@ -1,0 +1,33 @@
+
+ RUN  v3.2.4 /home/datum/.contextful-tlap/git-worktrees/worktree-3c9046fd-modular-typescript-refactoring-6k7kyr83
+
+ ✓ tests/commands/screenshot.test.ts (6 tests) 8ms
+ ✓ tests/platform/x11.test.ts (12 tests) 15ms
+ ✓ tests/commands/ipcMonitor.test.ts (9 tests) 11ms
+ ✓ tests/platform/macos.test.ts (15 tests) 17ms
+ ✓ tests/commands/rustLogs.test.ts (23 tests) 17ms
+ ✓ tests/bridge/tokenDiscovery.test.ts (9 tests) 22ms
+ ✓ tests/commands/storage.test.ts (16 tests) 9ms
+ ✓ tests/commands/consoleMonitor.test.ts (14 tests) 12ms
+ ✓ tests/platform/wayland.test.ts (7 tests) 21ms
+ ✓ tests/commands/diff.test.ts (15 tests) 160ms
+ ✓ tests/bridge/client.test.ts (12 tests) 121ms
+ ✓ tests/commands/mutations.test.ts (16 tests) 47ms
+ ✓ tests/commands/dom.test.ts (26 tests) 254ms
+ ✓ tests/commands/domText.test.ts (13 tests) 271ms
+ ✓ tests/commands/snapshot.test.ts (9 tests) 259ms
+ ✓ tests/commands/listWindows.test.ts (5 tests) 8ms
+ ✓ tests/util/image.test.ts (7 tests) 11ms
+ ✓ tests/commands/pageState.test.ts (4 tests) 9ms
+ ✓ tests/platform/detect.test.ts (8 tests) 5ms
+ ✓ tests/commands/eval.test.ts (2 tests) 7ms
+error: required option '-t, --title <regex>' not specified
+ ✓ tests/commands/shared.test.ts (6 tests) 11ms
+ ✓ tests/commands/info.test.ts (4 tests) 15ms
+ ✓ tests/commands/wait.test.ts (4 tests) 12ms
+
+ Test Files  23 passed (23)
+      Tests  242 passed (242)
+   Start at  09:14:40
+   Duration  1.27s (transform 2.08s, setup 0ms, collect 4.75s, tests 1.32s, environment 8ms, prepare 2.82s)
+

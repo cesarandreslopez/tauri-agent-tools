@@ -5,7 +5,7 @@ import { dirname, resolve } from 'path';
 import { Command } from 'commander';
 import type { DisplayServer, PlatformAdapter } from './types.js';
 import { detectDisplayServer, ensureTools } from './platform/detect.js';
-import { PackageJsonSchema } from './schemas.js';
+import { PackageJsonSchema } from './schemas/commands.js';
 import { X11Adapter } from './platform/x11.js';
 import { WaylandAdapter } from './platform/wayland.js';
 import { MacOSAdapter } from './platform/macos.js';
