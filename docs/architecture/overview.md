@@ -25,7 +25,7 @@ graph TD
 
 ## Entry Point
 
-`src/cli.ts` creates the `commander` program and registers all 15 commands. It also manages:
+`src/cli.ts` creates the `commander` program and registers all 14 commands. It also manages:
 
 - **Platform adapter creation** via `getAdapter()` — lazy initialization with tool checking
 - **Display server detection** — delegates to `detectDisplayServer()` in `src/platform/detect.ts`

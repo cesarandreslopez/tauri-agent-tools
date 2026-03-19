@@ -8,7 +8,7 @@ This package includes two [Agent Skills](https://agentskills.io):
 
 | Skill | Path | Purpose |
 |-------|------|---------|
-| `tauri-agent-tools` | `.agents/skills/tauri-agent-tools/SKILL.md` | Using the 15 CLI commands to inspect Tauri apps |
+| `tauri-agent-tools` | `.agents/skills/tauri-agent-tools/SKILL.md` | Using the 14 CLI commands to inspect Tauri apps |
 | `tauri-bridge-setup` | `.agents/skills/tauri-bridge-setup/SKILL.md` | Adding the Rust dev bridge to a Tauri project |
 
 ## Quick Reference

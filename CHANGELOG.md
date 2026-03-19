@@ -16,11 +16,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `--target <regex>` filtering by Rust module path
 - `--source <source>` filtering by origin (`rust`, `sidecar`, `all`, or `sidecar:<name>`)
 - Rust bridge: `LogBuffer` ring buffer (max 1000 entries), `BridgeLogLayer` tracing layer, `spawn_sidecar_monitored()` helper, `POST /logs` endpoint, `create_log_layer()` public API
+- Zod schema validation at all trust boundaries
+- Domain-split schema files (`schemas/bridge.ts`, `schemas/dom.ts`, `schemas/commands.ts`, `schemas/platform.ts`) with barrel re-export
+- Cross-module boundary integration tests
+- Import DAG linter (`scripts/check-imports.mjs`)
 
 ### Changed
 
 - `start_bridge()` now returns `(u16, Arc<LogBuffer>)` instead of `u16`
 - Bridge example requires `tracing` and `tracing-subscriber` crate dependencies
+- Replaced manual validation with Zod enum schemas for levels, modes, and IDs
+- Replaced `z.lazy` with getter-based recursion for recursive schemas
+- Additional TypeScript strictness options enabled (`noUncheckedIndexedAccess`, `noImplicitReturns`, `noFallthroughCasesInSwitch`)
+
+### Fixed
+
+- CLI output consistency, validation, and discoverability improvements
+- Schema validation hardening, regex safety, and dedup X11 parser
+- `parseEnum` generics updated for Zod v4 compatibility
 
 ## [0.3.0] - 2026-03-17
 
@@ -63,11 +76,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bridge setup requires `uuid` crate and `invoke_handler` registration in `main.rs`
 - Updated integration guide and agent skill with new setup steps
 
-## [0.1.0] - 2025-03-17
+## [0.1.0] - 2026-03-17
 
 ### Added
 
-- Initial CLI with 11 commands: `screenshot`, `dom`, `eval`, `wait`, `info`, `list-windows`, `ipc-monitor`, `console-monitor`, `storage`, `page-state`
+- Initial CLI with 10 commands: `screenshot`, `dom`, `eval`, `wait`, `info`, `list-windows`, `ipc-monitor`, `console-monitor`, `storage`, `page-state`
 - Rust dev bridge with token-authenticated localhost HTTP server
 - Platform support: Linux X11, Linux Wayland/Sway, macOS CoreGraphics
 - Agent Skills (`.agents/skills/`) and `AGENTS.md` for agent-driven discovery

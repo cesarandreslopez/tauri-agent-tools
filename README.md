@@ -4,7 +4,7 @@
 
 **Agent-driven inspection toolkit for Tauri desktop apps**
 
-15 read-only commands to screenshot, inspect, and monitor Tauri apps from the CLI.
+14 read-only commands to screenshot, inspect, and monitor Tauri apps from the CLI.
 
 [![CI](https://github.com/cesarandreslopez/tauri-agent-tools/actions/workflows/ci.yml/badge.svg)](https://github.com/cesarandreslopez/tauri-agent-tools/actions/workflows/ci.yml)
 [![npm version](https://img.shields.io/npm/v/tauri-agent-tools.svg)](https://www.npmjs.com/package/tauri-agent-tools)
@@ -52,7 +52,7 @@ npm install -g tauri-agent-tools
 
 ### 1. Add the bridge to your Tauri app
 
-See [rust-bridge/README.md](rust-bridge/README.md) for step-by-step integration (~120 lines of Rust).
+See [rust-bridge/README.md](rust-bridge/README.md) for step-by-step integration.
 
 The bridge runs a localhost-only, token-authenticated HTTP server during development. It auto-cleans up on exit.
 
@@ -307,7 +307,7 @@ This package ships [Agent Skills](https://agentskills.io) so AI coding agents ca
 
 | Skill | Description |
 |-------|-------------|
-| `tauri-agent-tools` | Using all 15 CLI commands to inspect Tauri apps |
+| `tauri-agent-tools` | Using all 14 CLI commands to inspect Tauri apps |
 | `tauri-bridge-setup` | Adding the Rust dev bridge to a Tauri project |
 
 <details>
@@ -361,7 +361,7 @@ Full documentation is available at the [docs site](https://cesarandreslopez.gith
 - [Installation](https://cesarandreslopez.github.io/tauri-agent-tools/getting-started/installation/) — system requirements and setup
 - [Quick Start](https://cesarandreslopez.github.io/tauri-agent-tools/getting-started/quick-start/) — get running in 5 minutes
 - [Bridge Setup](https://cesarandreslopez.github.io/tauri-agent-tools/getting-started/bridge-setup/) — integrate the Rust bridge into your Tauri app
-- [Command Reference](https://cesarandreslopez.github.io/tauri-agent-tools/commands/) — all 15 commands with examples
+- [Command Reference](https://cesarandreslopez.github.io/tauri-agent-tools/commands/) — all 14 commands with examples
 - [Platform Support](https://cesarandreslopez.github.io/tauri-agent-tools/platform-support/) — X11, Wayland, macOS details
 - [Architecture](https://cesarandreslopez.github.io/tauri-agent-tools/architecture/overview/) — how it works under the hood
 

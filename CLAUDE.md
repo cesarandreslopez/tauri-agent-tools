@@ -24,7 +24,7 @@ npx vitest run tests/commands/screenshot.test.ts
 
 | Location | Purpose |
 |----------|---------|
-| `src/cli.ts` | Entry point — registers all 15 commands via `commander` |
+| `src/cli.ts` | Entry point — registers all 14 commands via `commander` |
 | `src/schemas/` | Zod schemas split by domain: `bridge.ts`, `dom.ts`, `commands.ts`, `platform.ts` |
 | `src/types.ts` | Pure interfaces: `WindowInfo`, `PlatformAdapter`, `DisplayServer`, `WindowListEntry` |
 | `src/commands/` | One file per command (`screenshot.ts`, `dom.ts`, `eval.ts`, `wait.ts`, `info.ts`, `listWindows.ts`, `ipcMonitor.ts`, `consoleMonitor.ts`, `rustLogs.ts`, `storage.ts`, `pageState.ts`, `diff.ts`, `mutations.ts`, `snapshot.ts`) |
@@ -37,13 +37,13 @@ npx vitest run tests/commands/screenshot.test.ts
 | `src/bridge/tokenDiscovery.ts` | Token file scanning (`/tmp/tauri-dev-bridge-*.token`), PID liveness, stale cleanup |
 | `src/util/image.ts` | `cropImage()`, `resizeImage()`, `computeCropRect()` — ImageMagick operations |
 | `src/util/exec.ts` | `exec()` wrapper around `execFile()`, `validateWindowId()` |
-| `examples/tauri-bridge/src/dev_bridge.rs` | Reference Rust bridge (~120 lines) — not part of build |
+| `examples/tauri-bridge/src/dev_bridge.rs` | Reference Rust bridge (~440 lines) — not part of build |
 
 ## Architecture
 
 **Module system:** ESM (`"type": "module"`) with NodeNext resolution. All imports must use `.js` extensions (pointing to compiled output).
 
-**Entry point:** `src/cli.ts` registers 15 commands via `commander`. Each command is in `src/commands/`.
+**Entry point:** `src/cli.ts` registers 14 commands via `commander`. Each command is in `src/commands/`.
 
 **Command registration pattern:** Each command file exports a `registerXxx(program, ...)` function. Commands that need the platform adapter receive `getAdapter` as a parameter. Commands that need the bridge use `resolveBridge()` from `shared.ts`, which handles auto-discovery or explicit `--port`/`--token`.
 
@@ -55,7 +55,7 @@ npx vitest run tests/commands/screenshot.test.ts
 
 **Crop computation:** Screenshot commands combine window geometry from the platform adapter with element rect from the bridge to compute crop regions, accounting for window decorations (title bar, borders).
 
-**Rust bridge example:** `examples/tauri-bridge/src/dev_bridge.rs` (~120 lines) shows the Tauri-side HTTP server. Not part of the build — it's reference code for users integrating into their own Tauri apps.
+**Rust bridge example:** `examples/tauri-bridge/src/dev_bridge.rs` (~440 lines) shows the Tauri-side HTTP server. Not part of the build — it's reference code for users integrating into their own Tauri apps.
 
 ## Key Constraints
 
@@ -109,7 +109,7 @@ Dependencies flow strictly downward. Enforced by `scripts/check-imports.mjs`.
 
 ```bash
 npx tsc --noEmit                              # Type check
-npm test                                      # All tests (309 tests, 28 files)
+npm test                                      # All tests (345 tests, 30 files)
 node scripts/check-imports.mjs                # Import DAG linter
 npx madge --circular --extensions ts,tsx src/  # Circular dependency check
 ```

@@ -1,6 +1,6 @@
 # Command Reference
 
-tauri-agent-tools provides 15 read-only commands for inspecting Tauri applications.
+tauri-agent-tools provides 14 read-only commands for inspecting Tauri applications.
 
 ## Command Summary
 
