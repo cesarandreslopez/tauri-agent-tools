@@ -25,7 +25,8 @@ npx vitest run tests/commands/screenshot.test.ts
 | Location | Purpose |
 |----------|---------|
 | `src/cli.ts` | Entry point — registers all 15 commands via `commander` |
-| `src/types.ts` | Shared types: `WindowInfo`, `ElementRect`, `BridgeConfig`, `PlatformAdapter`, `DisplayServer`, `RustLogEntry` |
+| `src/schemas/` | Zod schemas split by domain: `bridge.ts`, `dom.ts`, `commands.ts`, `platform.ts` |
+| `src/types.ts` | Pure interfaces: `WindowInfo`, `PlatformAdapter`, `DisplayServer`, `WindowListEntry` |
 | `src/commands/` | One file per command (`screenshot.ts`, `dom.ts`, `eval.ts`, `wait.ts`, `info.ts`, `listWindows.ts`, `ipcMonitor.ts`, `consoleMonitor.ts`, `rustLogs.ts`, `storage.ts`, `pageState.ts`, `diff.ts`, `mutations.ts`, `snapshot.ts`) |
 | `src/commands/shared.ts` | `addBridgeOptions()` and `resolveBridge()` — shared bridge option wiring |
 | `src/platform/detect.ts` | `detectDisplayServer()` and `ensureTools()` — runtime platform detection |
@@ -83,41 +84,29 @@ npx vitest run tests/commands/screenshot.test.ts
 
 ## Refactoring Status
 
-**Currently in Phase 2** of a modular refactoring. See `specs/refactor/` for plans and progress.
+**Phase 3 complete.** The monolithic `src/schemas.ts` has been split into `src/schemas/` with 4 domain-focused files. All consumers updated. See `specs/schemas/progress.md` for details.
 
-**Goal:** Split monolithic `src/schemas.ts` (240 lines, 16 importers) into `src/schemas/` with 4 domain-focused files. All other modules stay structurally unchanged — only import paths update.
+### Schema Module Structure
 
-### Code Map (Current → Target)
+| File | Purpose |
+|------|---------|
+| `src/schemas/index.ts` | Barrel re-exports from all domain files |
+| `src/schemas/bridge.ts` | Bridge protocol schemas (TokenFile, BridgeConfig, ElementRect, RustLogEntry, etc.) |
+| `src/schemas/dom.ts` | Recursive DOM/a11y tree schemas (DomNode, A11yNode) |
+| `src/schemas/commands.ts` | CLI option and output schemas (ImageFormat, StorageEntry, ConsoleEntry, etc.) |
+| `src/schemas/platform.ts` | Platform-specific schemas (WindowId, CGWindowInfo, SwayNode) |
 
-| Current | Target | Change |
-|---------|--------|--------|
-| `src/schemas.ts` | `src/schemas/index.ts` (barrel) | Split into 4 domain files |
-| — | `src/schemas/bridge.ts` | Bridge protocol schemas |
-| — | `src/schemas/dom.ts` | DOM/a11y tree schemas |
-| — | `src/schemas/commands.ts` | CLI option/output schemas |
-| — | `src/schemas/platform.ts` | Platform-specific schemas |
-| `src/types.ts` | `src/types.ts` | Remove re-exports, keep interfaces |
-| `src/bridge/*` | `src/bridge/*` | Update import paths |
-| `src/commands/*` | `src/commands/*` | Update import paths |
-| `src/platform/*` | `src/platform/*` | Update import paths |
-| `src/util/*` | `src/util/*` | Update import paths |
-| `src/cli.ts` | `src/cli.ts` | Update import paths |
+### Import Conventions
 
-### Refactoring Rules
-
-- Every PR must be under ~300 lines changed (excluding tests)
-- `npx tsc --noEmit` must pass after every commit
-- `npm test` must pass after every commit
-- `node scripts/check-imports.mjs` must pass (enforces dependency DAG)
-- `npx madge --circular --extensions ts,tsx src/` must show no new cycles
-- No new `any` types
-- Use the compatibility re-export pattern from `specs/refactor/re-export-template.md` when moving symbols
+- Import schemas from their **domain file** directly: `import { BridgeConfigSchema } from '../schemas/bridge.js'`
+- `types.ts` contains only pure interfaces (`WindowInfo`, `PlatformAdapter`, `DisplayServer`, `WindowListEntry`)
+- Schema types used in interfaces are imported via `import type` from schemas/
 
 ### Safety Net Commands
 
 ```bash
 npx tsc --noEmit                              # Type check
-npm test                                      # All tests
+npm test                                      # All tests (287 tests, 27 files)
 node scripts/check-imports.mjs                # Import DAG linter
 npx madge --circular --extensions ts,tsx src/  # Circular dependency check
 ```
