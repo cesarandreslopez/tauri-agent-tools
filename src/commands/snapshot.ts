@@ -5,6 +5,7 @@ import { addBridgeOptions, resolveBridge } from './shared.js';
 import { buildSerializerScript } from './dom.js';
 import { computeCropRect, cropImage } from '../util/image.js';
 import type { BridgeClient } from '../bridge/client.js';
+import { DomNodeSchema, PageStateSchema, SnapshotStorageResultSchema } from '../schemas.js';
 
 const PAGE_STATE_SCRIPT = `(() => {
   return JSON.stringify({
@@ -93,8 +94,9 @@ export function registerSnapshot(
     // 2. DOM
     try {
       const raw = await bridge.eval(buildSerializerScript('body', opts.domDepth, false));
+      const parsed = DomNodeSchema.parse(JSON.parse(String(raw)));
       const path = `${prefix}-dom.json`;
-      await writeFile(path, JSON.stringify(JSON.parse(String(raw)), null, 2));
+      await writeFile(path, JSON.stringify(parsed, null, 2));
       files.dom = path;
     } catch (err) {
       files.dom = `error: ${err instanceof Error ? err.message : String(err)}`;
@@ -103,8 +105,9 @@ export function registerSnapshot(
     // 3. Page state
     try {
       const raw = await bridge.eval(PAGE_STATE_SCRIPT);
+      const parsed = PageStateSchema.parse(JSON.parse(String(raw)));
       const path = `${prefix}-page-state.json`;
-      await writeFile(path, JSON.stringify(JSON.parse(String(raw)), null, 2));
+      await writeFile(path, JSON.stringify(parsed, null, 2));
       files.pageState = path;
     } catch (err) {
       files.pageState = `error: ${err instanceof Error ? err.message : String(err)}`;
@@ -113,8 +116,9 @@ export function registerSnapshot(
     // 4. Storage
     try {
       const raw = await bridge.eval(STORAGE_SCRIPT);
+      const parsed = SnapshotStorageResultSchema.parse(JSON.parse(String(raw)));
       const path = `${prefix}-storage.json`;
-      await writeFile(path, JSON.stringify(JSON.parse(String(raw)), null, 2));
+      await writeFile(path, JSON.stringify(parsed, null, 2));
       files.storage = path;
     } catch (err) {
       files.storage = `error: ${err instanceof Error ? err.message : String(err)}`;

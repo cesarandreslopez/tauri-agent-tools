@@ -68,23 +68,24 @@ export function registerStorage(program: Command): void {
       }
 
       const bridge = await resolveBridge(opts);
-      const result: Record<string, unknown> = {};
+      const keyResult: Record<string, string | null> = {};
+      const listResult: Record<string, StorageEntry[]> = {};
 
       if (opts.type === 'local' || opts.type === 'all') {
         const raw = await bridge.eval(buildLocalStorageScript(opts.key));
         if (opts.key) {
-          result.localStorage = raw;
+          keyResult.localStorage = raw == null ? null : String(raw);
         } else {
-          result.localStorage = z.array(StorageEntrySchema).parse(JSON.parse(String(raw)));
+          listResult.localStorage = z.array(StorageEntrySchema).parse(JSON.parse(String(raw)));
         }
       }
 
       if (opts.type === 'session' || opts.type === 'all') {
         const raw = await bridge.eval(buildSessionStorageScript(opts.key));
         if (opts.key) {
-          result.sessionStorage = raw;
+          keyResult.sessionStorage = raw == null ? null : String(raw);
         } else {
-          result.sessionStorage = z.array(StorageEntrySchema).parse(JSON.parse(String(raw)));
+          listResult.sessionStorage = z.array(StorageEntrySchema).parse(JSON.parse(String(raw)));
         }
       }
 
@@ -93,32 +94,30 @@ export function registerStorage(program: Command): void {
           const raw = await bridge.eval(buildCookiesScript());
           const cookies = parseCookies(String(raw));
           const match = cookies.find((c) => c.key === opts.key);
-          result.cookies = match ? match.value : null;
+          keyResult.cookies = match ? match.value : null;
         } else {
           const raw = await bridge.eval(buildCookiesScript());
-          result.cookies = parseCookies(String(raw));
+          listResult.cookies = parseCookies(String(raw));
         }
       }
 
       if (opts.json) {
-        console.log(JSON.stringify(result, null, 2));
+        console.log(JSON.stringify(opts.key ? keyResult : listResult, null, 2));
       } else {
         if (opts.key) {
-          for (const [store, value] of Object.entries(result)) {
-            console.log(`${store}: ${value === null ? '(not found)' : String(value)}`);
+          for (const [store, value] of Object.entries(keyResult)) {
+            console.log(`${store}: ${value === null ? '(not found)' : value}`);
           }
         } else {
           const sections: string[] = [];
-          if (result.localStorage) {
-            sections.push(formatSection('localStorage', result.localStorage as StorageEntry[]));
+          if (listResult.localStorage) {
+            sections.push(formatSection('localStorage', listResult.localStorage));
           }
-          if (result.sessionStorage) {
-            sections.push(
-              formatSection('sessionStorage', result.sessionStorage as StorageEntry[]),
-            );
+          if (listResult.sessionStorage) {
+            sections.push(formatSection('sessionStorage', listResult.sessionStorage));
           }
-          if (result.cookies) {
-            sections.push(formatSection('cookies', result.cookies as StorageEntry[]));
+          if (listResult.cookies) {
+            sections.push(formatSection('cookies', listResult.cookies));
           }
           console.log(sections.join('\n\n'));
         }

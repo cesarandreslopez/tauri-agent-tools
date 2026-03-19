@@ -145,6 +145,21 @@ export const IpcEntrySchema = z.object({
 });
 export type IpcEntry = z.infer<typeof IpcEntrySchema>;
 
+// === Snapshot: combined storage result ===
+
+export const SnapshotStorageResultSchema = z.object({
+  localStorage: z.array(StorageEntrySchema),
+  sessionStorage: z.array(StorageEntrySchema),
+});
+export type SnapshotStorageResult = z.infer<typeof SnapshotStorageResultSchema>;
+
+// === CLI: package.json ===
+
+export const PackageJsonSchema = z.object({
+  version: z.string(),
+}).passthrough();
+export type PackageJson = z.infer<typeof PackageJsonSchema>;
+
 // === Platform: macOS ===
 
 export const CGWindowInfoSchema = z.object({

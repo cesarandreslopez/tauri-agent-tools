@@ -5,6 +5,7 @@ import { dirname, resolve } from 'path';
 import { Command } from 'commander';
 import type { DisplayServer, PlatformAdapter } from './types.js';
 import { detectDisplayServer, ensureTools } from './platform/detect.js';
+import { PackageJsonSchema } from './schemas.js';
 import { X11Adapter } from './platform/x11.js';
 import { WaylandAdapter } from './platform/wayland.js';
 import { MacOSAdapter } from './platform/macos.js';
@@ -24,7 +25,7 @@ import { registerDiff } from './commands/diff.js';
 import { registerRustLogs } from './commands/rustLogs.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const pkg = JSON.parse(readFileSync(resolve(__dirname, '..', 'package.json'), 'utf-8'));
+const pkg = PackageJsonSchema.parse(JSON.parse(readFileSync(resolve(__dirname, '..', 'package.json'), 'utf-8')));
 
 const program = new Command()
   .name('tauri-agent-tools')
