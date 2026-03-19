@@ -1,6 +1,8 @@
 site_name: tauri-agent-tools
 site_description: Agent-driven inspection toolkit for Tauri desktop apps
 site_url: https://cesarandreslopez.github.io/tauri-agent-tools/
+repo_url: https://github.com/cesarandreslopez/tauri-agent-tools
+repo_name: cesarandreslopez/tauri-agent-tools
 
 theme:
   name: material
