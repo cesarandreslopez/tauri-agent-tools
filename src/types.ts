@@ -11,7 +11,7 @@ export interface WindowInfo {
   height: number;
 }
 
-export type DisplayServer = 'x11' | 'wayland' | 'darwin' | 'unknown';
+export type DisplayServer = 'x11' | 'wayland-sway' | 'wayland-hyprland' | 'wayland' | 'darwin' | 'unknown';
 
 export interface PlatformAdapter {
   findWindow(title: string): Promise<string>;

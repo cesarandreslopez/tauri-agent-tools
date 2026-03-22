@@ -201,7 +201,7 @@ describe('Util module uses schemas correctly', () => {
 describe('Platform module detection', () => {
   it('detectDisplayServer returns a valid DisplayServer value', () => {
     const ds = detectDisplayServer();
-    const validValues: DisplayServer[] = ['x11', 'wayland', 'darwin', 'unknown'];
+    const validValues: DisplayServer[] = ['x11', 'wayland', 'wayland-sway', 'wayland-hyprland', 'darwin', 'unknown'];
     expect(validValues).toContain(ds);
   });
 });
