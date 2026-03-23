@@ -15,6 +15,10 @@ vi.mock('../src/platform/wayland.js', () => ({
   WaylandAdapter: vi.fn().mockImplementation(() => ({})),
 }));
 
+vi.mock('../src/platform/hyprland.js', () => ({
+  HyprlandAdapter: vi.fn().mockImplementation(() => ({})),
+}));
+
 vi.mock('../src/platform/macos.js', () => ({
   MacOSAdapter: vi.fn().mockImplementation(() => ({})),
 }));

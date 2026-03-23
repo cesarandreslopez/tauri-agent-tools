@@ -10,6 +10,8 @@ describe('detectDisplayServer', () => {
     delete process.env.WAYLAND_DISPLAY;
     delete process.env.DISPLAY;
     delete process.env.XDG_SESSION_TYPE;
+    delete process.env.SWAYSOCK;
+    delete process.env.HYPRLAND_INSTANCE_SIGNATURE;
   });
 
   afterEach(() => {
@@ -63,5 +65,27 @@ describe('detectDisplayServer', () => {
     Object.defineProperty(process, 'platform', { value: 'darwin' });
     process.env.WAYLAND_DISPLAY = 'wayland-0';
     expect(detectDisplayServer()).toBe('darwin');
+  });
+
+  it('returns "wayland-sway" when SWAYSOCK is set on Wayland', () => {
+    Object.defineProperty(process, 'platform', { value: 'linux' });
+    process.env.WAYLAND_DISPLAY = 'wayland-0';
+    process.env.SWAYSOCK = '/run/user/1000/sway-ipc.sock';
+    expect(detectDisplayServer()).toBe('wayland-sway');
+  });
+
+  it('returns "wayland-hyprland" when HYPRLAND_INSTANCE_SIGNATURE is set on Wayland', () => {
+    Object.defineProperty(process, 'platform', { value: 'linux' });
+    process.env.WAYLAND_DISPLAY = 'wayland-0';
+    process.env.HYPRLAND_INSTANCE_SIGNATURE = 'abc123';
+    expect(detectDisplayServer()).toBe('wayland-hyprland');
+  });
+
+  it('prefers sway over hyprland when both env vars are set', () => {
+    Object.defineProperty(process, 'platform', { value: 'linux' });
+    process.env.WAYLAND_DISPLAY = 'wayland-0';
+    process.env.SWAYSOCK = '/run/user/1000/sway-ipc.sock';
+    process.env.HYPRLAND_INSTANCE_SIGNATURE = 'abc123';
+    expect(detectDisplayServer()).toBe('wayland-sway');
   });
 });

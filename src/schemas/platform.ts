@@ -20,7 +20,7 @@ export const CGWindowInfoSchema = z.object({
 });
 export type CGWindowInfo = z.infer<typeof CGWindowInfoSchema>;
 
-// === Platform: Wayland ===
+// === Platform: Wayland / Sway ===
 
 export interface SwayNode {
   id: number;
@@ -48,3 +48,18 @@ export const SwayNodeSchema: z.ZodType<SwayNode> = z.object({
     return z.array(SwayNodeSchema).optional();
   },
 });
+
+// === Platform: Wayland / Hyprland ===
+
+export const HyprClientSchema = z.object({
+  address: z.string(),
+  mapped: z.boolean(),
+  hidden: z.boolean(),
+  at: z.tuple([z.number(), z.number()]),
+  size: z.tuple([z.number(), z.number()]),
+  title: z.string(),
+  pid: z.number(),
+}).passthrough();
+export type HyprClient = z.infer<typeof HyprClientSchema>;
+
+export const HyprClientListSchema = z.array(HyprClientSchema);
