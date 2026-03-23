@@ -57,25 +57,9 @@ export const HyprClientSchema = z.object({
   hidden: z.boolean(),
   at: z.tuple([z.number(), z.number()]),
   size: z.tuple([z.number(), z.number()]),
-  workspace: z.object({
-    id: z.number(),
-    name: z.string(),
-  }),
-  floating: z.boolean(),
-  monitor: z.number(),
-  class: z.string(),
   title: z.string(),
-  initialClass: z.string(),
-  initialTitle: z.string(),
   pid: z.number(),
-  xwayland: z.boolean(),
-  pinned: z.boolean(),
-  fullscreen: z.number(),
-  grouped: z.array(z.string()),
-  tags: z.array(z.string()),
-  swallowing: z.string(),
-  focusHistoryID: z.number(),
-});
+}).passthrough();
 export type HyprClient = z.infer<typeof HyprClientSchema>;
 
 export const HyprClientListSchema = z.array(HyprClientSchema);

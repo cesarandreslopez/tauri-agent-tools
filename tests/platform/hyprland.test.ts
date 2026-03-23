@@ -16,21 +16,8 @@ function makeClient(overrides: Record<string, unknown> = {}) {
     hidden: false,
     at: [50, 100],
     size: [800, 600],
-    workspace: { id: 1, name: '1' },
-    floating: false,
-    monitor: 0,
-    class: 'my-tauri-app',
     title: 'My Tauri App',
-    initialClass: 'my-tauri-app',
-    initialTitle: 'My Tauri App',
     pid: 5001,
-    xwayland: false,
-    pinned: false,
-    fullscreen: 0,
-    grouped: [],
-    tags: [],
-    swallowing: '0x0',
-    focusHistoryID: 0,
     ...overrides,
   };
 }
@@ -40,9 +27,6 @@ const clients = [
   makeClient({
     address: '0x561db2322660',
     title: 'Firefox',
-    class: 'firefox',
-    initialClass: 'firefox',
-    initialTitle: 'Firefox',
     pid: 5002,
     at: [900, 100],
     size: [1000, 900],
@@ -201,6 +185,27 @@ describe('HyprlandAdapter', () => {
       expect(mockExec).toHaveBeenCalledWith('grim', [
         '-g', '50,100 800x600',
         '-t', 'png',
+        '-',
+      ]);
+    });
+
+    it('maps jpg format to jpeg for grim', async () => {
+      const fakeImage = Buffer.from('fake-jpg-image');
+      mockExec.mockResolvedValueOnce({
+        stdout: Buffer.from(JSON.stringify(clients)),
+        stderr: '',
+      });
+      mockExec.mockResolvedValueOnce({
+        stdout: fakeImage,
+        stderr: '',
+      });
+
+      const result = await adapter.captureWindow('0x561db2322550', 'jpg');
+      expect(result).toBe(fakeImage);
+
+      expect(mockExec).toHaveBeenCalledWith('grim', [
+        '-g', '50,100 800x600',
+        '-t', 'jpeg',
         '-',
       ]);
     });
