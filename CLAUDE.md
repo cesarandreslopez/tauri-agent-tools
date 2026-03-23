@@ -32,6 +32,7 @@ npx vitest run tests/commands/screenshot.test.ts
 | `src/platform/detect.ts` | `detectDisplayServer()` and `ensureTools()` — runtime platform detection |
 | `src/platform/x11.ts` | X11 adapter: `xdotool` + ImageMagick `import` |
 | `src/platform/wayland.ts` | Wayland/Sway adapter: `swaymsg` + `grim` |
+| `src/platform/hyprland.ts` | Wayland/Hyprland adapter: `hyprctl` + `grim` |
 | `src/platform/macos.ts` | macOS adapter: `screencapture` + `osascript` + `sips` |
 | `src/bridge/client.ts` | `BridgeClient` class — HTTP POST to `/eval` and `/logs` endpoints |
 | `src/bridge/tokenDiscovery.ts` | Token file scanning (`/tmp/tauri-dev-bridge-*.token`), PID liveness, stale cleanup |

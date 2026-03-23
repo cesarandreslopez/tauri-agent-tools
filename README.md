@@ -46,6 +46,7 @@ npm install -g tauri-agent-tools
 **System requirements:**
 - **Linux X11:** `xdotool`, `imagemagick` (`sudo apt install xdotool imagemagick`)
 - **Linux Wayland/Sway:** `swaymsg`, `grim`, `imagemagick`
+- **Linux Wayland/Hyprland:** `hyprctl` (included with Hyprland), `grim`, `imagemagick`
 - **macOS:** `imagemagick` (`brew install imagemagick`) — all other tools are built-in. Grant Screen Recording permission in System Settings → Privacy & Security → Screen Recording.
 
 ## Quick Start
@@ -267,6 +268,7 @@ The crop accounts for window decoration (title bar, borders) by comparing `windo
 |----------|---------------|--------|
 | Linux | X11 | Supported |
 | Linux | Wayland (Sway) | Supported |
+| Linux | Wayland (Hyprland) | Supported |
 | macOS | CoreGraphics | Supported |
 | Windows | - | Planned |
 

@@ -23,6 +23,7 @@ assignees: ''
 - [ ] All platforms
 - [ ] Linux X11
 - [ ] Linux Wayland/Sway
+- [ ] Linux Wayland/Hyprland
 - [ ] macOS
 - [ ] Windows (planned)
 

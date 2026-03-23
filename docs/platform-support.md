@@ -6,6 +6,7 @@
 |----------|---------------|--------|:----------:|:-----------:|:---------------:|
 | Linux | X11 | Supported | `import` | `xdotool` | `xdotool` |
 | Linux | Wayland (Sway) | Supported | `grim` | `swaymsg` | `swaymsg` |
+| Linux | Wayland (Hyprland) | Supported | `grim` | `hyprctl` | `hyprctl` |
 | macOS | CoreGraphics | Supported | `screencapture` | `osascript` | `osascript` |
 | Windows | — | Planned | — | — | — |
 
@@ -17,14 +18,15 @@ The CLI automatically detects the display server at startup:
 flowchart TD
     A[detectDisplayServer] --> B{process.platform === 'darwin'?}
     B -->|yes| C[darwin]
-    B -->|no| D{WAYLAND_DISPLAY set?}
-    D -->|yes| E[wayland]
-    D -->|no| F{DISPLAY set?}
-    F -->|yes| G[x11]
-    F -->|no| H{XDG_SESSION_TYPE?}
-    H -->|wayland| E
-    H -->|x11| G
-    H -->|other| I[unknown → error]
+    B -->|no| D{Wayland session?}
+    D -->|yes| E{SWAYSOCK set?}
+    E -->|yes| F[wayland-sway]
+    E -->|no| G{HYPRLAND_INSTANCE_SIGNATURE set?}
+    G -->|yes| H[wayland-hyprland]
+    G -->|no| I[wayland]
+    D -->|no| J{DISPLAY set?}
+    J -->|yes| K[x11]
+    J -->|no| L[unknown → error]
 ```
 
 ## Platform Details
@@ -71,7 +73,28 @@ flowchart TD
     - `convert` crops and resizes via stdin/stdout pipes
 
     !!! warning "Compositor Support"
-        Currently only **Sway** is supported. Other Wayland compositors (GNOME, KDE) would need their own adapters.
+        Other Wayland compositors (GNOME, KDE) would need their own adapters. Currently Sway and Hyprland are supported.
+
+=== "Linux Wayland (Hyprland)"
+
+    **Required tools:**
+
+    | Tool | Package | Purpose |
+    |------|---------|---------|
+    | `hyprctl` | Hyprland | Window listing and geometry via IPC |
+    | `grim` | `grim` | Screenshot capture |
+    | `convert` | `imagemagick` | Image crop and resize |
+
+    ```bash
+    sudo apt install grim imagemagick
+    # hyprctl is included with Hyprland
+    ```
+
+    **How it works:**
+
+    - `hyprctl clients -j` lists all windows with geometry as JSON
+    - `grim -g <geometry>` captures a screen region
+    - `convert` crops and resizes via stdin/stdout pipes
 
 === "macOS"
 

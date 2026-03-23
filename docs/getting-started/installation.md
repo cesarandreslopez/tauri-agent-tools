@@ -34,6 +34,15 @@ Platform-specific tools are also needed for screenshot and window operations:
 
     Tools used: `swaymsg` (window listing/geometry), `grim` (screenshot capture), `convert` (crop/resize).
 
+=== "Linux Wayland/Hyprland"
+
+    ```bash
+    sudo apt install grim imagemagick
+    # hyprctl is included with Hyprland
+    ```
+
+    Tools used: `hyprctl` (window listing/geometry), `grim` (screenshot capture), `convert` (crop/resize).
+
 === "macOS"
 
     ```bash

@@ -9,6 +9,7 @@ Thank you for your interest in contributing! This guide will help you get starte
 - **Platform tools** (for running screenshot/window commands):
   - **Linux X11:** `xdotool`, `imagemagick`
   - **Linux Wayland/Sway:** `swaymsg`, `grim`, `imagemagick`
+  - **Linux Wayland/Hyprland:** `hyprctl` (included with Hyprland), `grim`, `imagemagick`
   - **macOS:** `imagemagick` (via Homebrew) + Screen Recording permission
 
 ## Development Setup
@@ -58,6 +59,7 @@ tauri-agent-tools/
 │   │   ├── detect.ts           # Display server detection, tool checks
 │   │   ├── x11.ts              # X11 adapter
 │   │   ├── wayland.ts          # Wayland/Sway adapter
+│   │   ├── hyprland.ts         # Wayland/Hyprland adapter
 │   │   └── macos.ts            # macOS adapter
 │   ├── bridge/
 │   │   ├── client.ts           # BridgeClient — HTTP POST to /eval and /logs

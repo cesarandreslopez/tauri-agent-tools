@@ -9,6 +9,7 @@ graph TD
     CMD --> BC[src/bridge/<br/>Bridge Client]
     PA --> X11[X11 Adapter<br/>xdotool + import]
     PA --> WL[Wayland Adapter<br/>swaymsg + grim]
+    PA --> HY[Hyprland Adapter<br/>hyprctl + grim]
     PA --> MAC[macOS Adapter<br/>screencapture + osascript]
     BC --> TD[Token Discovery<br/>/tmp/*.token]
     BC --> BR[Tauri Bridge<br/>HTTP POST /eval]
@@ -64,6 +65,7 @@ Adapters are in `src/platform/`:
 |---------|------|-------|
 | X11 | `x11.ts` | `xdotool`, `import`, `convert` |
 | Wayland | `wayland.ts` | `swaymsg`, `grim`, `convert` |
+| Hyprland | `hyprland.ts` | `hyprctl`, `grim`, `convert` |
 | macOS | `macos.ts` | `screencapture`, `osascript`, `sips`, `convert` |
 
 ## Bridge Client

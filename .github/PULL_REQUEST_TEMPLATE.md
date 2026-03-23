@@ -39,4 +39,5 @@
 
 - [ ] Linux X11
 - [ ] Linux Wayland/Sway
+- [ ] Linux Wayland/Hyprland
 - [ ] macOS

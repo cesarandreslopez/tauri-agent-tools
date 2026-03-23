@@ -25,6 +25,7 @@ npm install -g tauri-agent-tools
 |----------|-------------|
 | Linux X11 | `xdotool`, `imagemagick` (`sudo apt install xdotool imagemagick`) |
 | Linux Wayland/Sway | `swaymsg`, `grim`, `imagemagick` |
+| Linux Wayland/Hyprland | `hyprctl` (included with Hyprland), `grim`, `imagemagick` |
 | macOS | `imagemagick` (`brew install imagemagick`), Screen Recording permission |
 
 ## Bridge vs Standalone
