@@ -8,6 +8,7 @@ import { detectDisplayServer, ensureTools } from './platform/detect.js';
 import { PackageJsonSchema } from './schemas/commands.js';
 import { X11Adapter } from './platform/x11.js';
 import { WaylandAdapter } from './platform/wayland.js';
+import { HyprlandAdapter } from './platform/hyprland.js';
 import { MacOSAdapter } from './platform/macos.js';
 import { registerScreenshot } from './commands/screenshot.js';
 import { registerInfo } from './commands/info.js';
@@ -48,7 +49,9 @@ async function getAdapter(): Promise<PlatformAdapter> {
   }
 
   if (ds === 'darwin') return new MacOSAdapter();
-  return ds === 'x11' ? new X11Adapter() : new WaylandAdapter();
+  if (ds === 'wayland-hyprland') return new HyprlandAdapter();
+  if (ds === 'wayland-sway' || ds === 'wayland') return new WaylandAdapter();
+  return new X11Adapter();
 }
 
 registerScreenshot(program, getAdapter);
