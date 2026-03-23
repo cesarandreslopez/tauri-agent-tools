@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-03-23
+
+### Added
+
+- Hyprland Wayland compositor support via `HyprlandAdapter` using `hyprctl` for window management and `grim` for screenshots ([#3](https://github.com/cesarandreslopez/tauri-agent-tools/pull/3) by [@gabrielpgagne](https://github.com/gabrielpgagne))
+- `HYPRLAND_INSTANCE_SIGNATURE` environment variable detection for automatic adapter selection
+- `checkHyprlandTools()` for verifying Hyprland-specific tool availability
+- `HyprClientSchema` Zod schema for validated `hyprctl clients -j` output
+
+### Changed
+
+- `DisplayServer` type now distinguishes `wayland-sway`, `wayland-hyprland`, and generic `wayland`
+- `detectDisplayServer()` checks `SWAYSOCK` and `HYPRLAND_INSTANCE_SIGNATURE` for compositor-specific adapters
+- `checkWaylandTools()` renamed to `checkSwayTools()` for clarity
+
 ## [0.4.0] - 2026-03-19
 
 ### Added

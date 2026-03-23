@@ -1,7 +1,7 @@
 ---
 name: tauri-agent-tools
 description: CLI for inspecting Tauri desktop apps — DOM queries, screenshots, IPC/console monitoring, storage, and page state
-version: 0.4.0
+version: 0.5.0
 tags: [tauri, desktop, debugging, screenshot, dom, inspection, diff, mutations, snapshot]
 ---
 
