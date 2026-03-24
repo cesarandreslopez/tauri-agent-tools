@@ -74,7 +74,7 @@ When `--selector` is used:
 2. Bridge reports viewport size (`window.innerWidth/innerHeight`)
 3. Platform adapter captures the full window
 4. Crop region is computed: element rect + decoration offset (title bar, borders)
-5. ImageMagick `convert` crops to the element bounds
+5. ImageMagick crops to the element bounds
 6. Optional resize with `--max-width`
 
 When only `--title` is used, the full window is captured directly without cropping.

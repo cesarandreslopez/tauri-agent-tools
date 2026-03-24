@@ -37,6 +37,7 @@ npx vitest run tests/commands/screenshot.test.ts
 | `src/bridge/client.ts` | `BridgeClient` class — HTTP POST to `/eval` and `/logs` endpoints |
 | `src/bridge/tokenDiscovery.ts` | Token file scanning (`/tmp/tauri-dev-bridge-*.token`), PID liveness, stale cleanup |
 | `src/util/image.ts` | `cropImage()`, `resizeImage()`, `computeCropRect()` — ImageMagick operations |
+| `src/util/magick.ts` | `magickCommand()`, `detectMagickVersion()` — ImageMagick v6/v7 version detection and command resolution |
 | `src/util/exec.ts` | `exec()` wrapper around `execFile()`, `validateWindowId()` |
 | `examples/tauri-bridge/src/dev_bridge.rs` | Reference Rust bridge (~440 lines) — not part of build |
 
@@ -50,7 +51,9 @@ npx vitest run tests/commands/screenshot.test.ts
 
 **Bridge resolution flow:** `resolveBridge()` in `shared.ts` → `discoverBridge()` in `tokenDiscovery.ts` → scans `/tmp/tauri-dev-bridge-*.token` files → parses JSON (`{ port, token, pid }`) → checks PID liveness via `process.kill(pid, 0)` → cleans stale files from dead processes → returns first live bridge config. If both `--port` and `--token` are provided, auto-discovery is skipped.
 
-**Platform adapter pattern:** `src/platform/` has three adapters (X11, Wayland, macOS) implementing a common interface (`findWindow`, `captureWindow`, `getWindowGeometry`, `getWindowName`, `listWindows`). Detection logic in `src/platform/detect.ts` selects the adapter at runtime.
+**Platform adapter pattern:** `src/platform/` has four adapters (X11, Wayland/Sway, Hyprland, macOS) implementing a common interface (`findWindow`, `captureWindow`, `getWindowGeometry`, `getWindowName`, `listWindows`). Detection logic in `src/platform/detect.ts` selects the adapter at runtime.
+
+**ImageMagick version detection:** `src/util/magick.ts` detects ImageMagick v6 (standalone `convert`, `import`, etc.) vs v7 (unified `magick` binary) at startup. The `magickCommand()` function returns the correct binary and args for each subcommand. Result is cached after first detection.
 
 **Bridge client:** `src/bridge/client.ts` communicates with a Rust dev bridge running inside the Tauri app via HTTP POST to a localhost `/eval` endpoint with token auth. Token auto-discovered from `/tmp/tauri-dev-bridge-*.token` files (see `src/bridge/tokenDiscovery.ts`).
 
@@ -110,7 +113,7 @@ Dependencies flow strictly downward. Enforced by `scripts/check-imports.mjs`.
 
 ```bash
 npx tsc --noEmit                              # Type check
-npm test                                      # All tests (345 tests, 30 files)
+npm test                                      # All tests (366 tests, 32 files)
 node scripts/check-imports.mjs                # Import DAG linter
 npx madge --circular --extensions ts,tsx src/  # Circular dependency check
 ```

@@ -66,4 +66,4 @@ tauri-agent-tools diff /tmp/a.png /tmp/b.png --json
 
 ## Requirements
 
-Requires ImageMagick (`compare` and `identify` commands) installed on the system. The `--threshold` option requires `identify` to compute image dimensions.
+Requires ImageMagick installed on the system. Both v6 (`compare`, `identify`) and v7 (`magick compare`, `magick identify`) are supported automatically. The `--threshold` option requires `identify` to compute image dimensions.

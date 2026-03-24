@@ -11,6 +11,10 @@ vi.mock('node:fs/promises', () => ({
   writeFile: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock('../../src/util/magick.js', () => ({
+  magickCommand: vi.fn((sub: string) => Promise.resolve({ bin: sub, args: [] })),
+}));
+
 import { exec } from '../../src/util/exec.js';
 import { stat } from 'node:fs/promises';
 

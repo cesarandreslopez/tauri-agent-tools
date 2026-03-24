@@ -9,6 +9,10 @@ vi.mock('../../src/util/exec.js', () => ({
   }),
 }));
 
+vi.mock('../../src/util/magick.js', () => ({
+  magickCommand: vi.fn((sub: string) => Promise.resolve({ bin: sub, args: [] })),
+}));
+
 import { exec } from '../../src/util/exec.js';
 const mockExec = vi.mocked(exec);
 

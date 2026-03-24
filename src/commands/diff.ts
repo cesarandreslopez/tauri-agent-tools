@@ -2,6 +2,7 @@ import { stat } from 'node:fs/promises';
 import { Command } from 'commander';
 import { z } from 'zod';
 import { exec } from '../util/exec.js';
+import { magickCommand } from '../util/magick.js';
 
 interface DiffResult {
   pixelsDifferent: number;
@@ -48,7 +49,8 @@ export function registerDiff(program: Command): void {
     // Get image dimensions for total pixel count
     let totalPixels = 0;
     try {
-      const { stdout } = await exec('identify', ['-format', '%w %h', image1]);
+      const identifyCmd = await magickCommand('identify');
+      const { stdout } = await exec(identifyCmd.bin, [...identifyCmd.args, '-format', '%w %h', image1]);
       const [w, h] = z.tuple([z.number().int().positive(), z.number().int().positive()]).parse(
         stdout.toString().trim().split(' ').map(Number),
       );
@@ -65,7 +67,9 @@ export function registerDiff(program: Command): void {
 
     try {
       // compare exits with code 1 when images differ (not an error)
-      const { stderr } = await exec('compare', [
+      const compareCmd = await magickCommand('compare');
+      const { stderr } = await exec(compareCmd.bin, [
+        ...compareCmd.args,
         '-metric', 'AE',
         image1,
         image2,

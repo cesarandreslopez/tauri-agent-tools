@@ -1,6 +1,7 @@
 import type { ElementRect } from '../schemas/bridge.js';
 import type { ImageFormat } from '../schemas/commands.js';
 import { exec } from './exec.js';
+import { magickCommand } from './magick.js';
 
 export async function cropImage(
   buffer: Buffer,
@@ -9,9 +10,10 @@ export async function cropImage(
 ): Promise<Buffer> {
   const fmt = format === 'jpg' ? 'jpg' : 'png';
   const crop = `${Math.round(rect.width)}x${Math.round(rect.height)}+${Math.round(rect.x)}+${Math.round(rect.y)}`;
+  const cmd = await magickCommand('convert');
   const { stdout } = await exec(
-    'convert',
-    [`${fmt}:-`, '-crop', crop, '+repage', `${fmt}:-`],
+    cmd.bin,
+    [...cmd.args, `${fmt}:-`, '-crop', crop, '+repage', `${fmt}:-`],
     { stdin: buffer },
   );
   return stdout;
@@ -23,9 +25,10 @@ export async function resizeImage(
   format: ImageFormat,
 ): Promise<Buffer> {
   const fmt = format === 'jpg' ? 'jpg' : 'png';
+  const cmd = await magickCommand('convert');
   const { stdout } = await exec(
-    'convert',
-    [`${fmt}:-`, '-resize', `${maxWidth}x\\>`, `${fmt}:-`],
+    cmd.bin,
+    [...cmd.args, `${fmt}:-`, '-resize', `${maxWidth}x>`, `${fmt}:-`],
     { stdin: buffer },
   );
   return stdout;

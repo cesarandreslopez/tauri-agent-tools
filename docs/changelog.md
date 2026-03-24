@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1] - 2026-03-24
+
+### Added
+
+- `src/util/magick.ts` — ImageMagick version detection module with caching; auto-detects v6 (standalone `convert`) vs v7 (unified `magick` binary) at runtime ([#4](https://github.com/cesarandreslopez/tauri-agent-tools/issues/4))
+
+### Fixed
+
+- ImageMagick v7 compatibility — all ImageMagick invocations (`convert`, `import`, `identify`, `compare`) now route through the version-aware `magickCommand()` resolver, using `magick <subcommand>` on v7 and standalone commands on v6
+- `resizeImage()` backslash escape bug — `-resize` argument was `800x\>` (literal backslash) instead of `800x>`, causing "invalid argument" errors on ImageMagick v7
+- Tool availability checks (`detect.ts`) now recognize `magick` binary as valid ImageMagick installation, falling back to `convert` for v6
+
 ## [0.5.0] - 2026-03-23
 
 ### Added

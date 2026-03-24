@@ -21,7 +21,7 @@ Combine a bridge's knowledge of element positions (`getBoundingClientRect`) with
 
 - **DOM-targeted capture** — screenshot any CSS-selectable element with real screen pixels
 - **14 read-only commands** — screenshot, dom, eval, wait, info, list-windows, ipc-monitor, console-monitor, storage, page-state, diff, mutations, snapshot, rust-logs
-- **Cross-platform** — Linux X11, Linux Wayland/Sway, macOS
+- **Cross-platform** — Linux X11, Linux Wayland/Sway, Linux Wayland/Hyprland, macOS
 - **Token authenticated** — random 32-char token, localhost-only bridge
 - **Agent Skills** — ships agentskills.io skills for AI coding agents
 - **JSON output** — all commands support `--json` for structured output
