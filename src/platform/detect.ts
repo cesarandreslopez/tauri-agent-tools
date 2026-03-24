@@ -30,65 +30,82 @@ export interface ToolCheck {
   installHint: string;
 }
 
-export async function checkX11Tools(): Promise<ToolCheck[]> {
-  const tools: Array<{ name: string; installHint: string }> = [
-    { name: 'xdotool', installHint: 'sudo apt install xdotool' },
-    { name: 'import', installHint: 'sudo apt install imagemagick' },
-    { name: 'convert', installHint: 'sudo apt install imagemagick' },
-  ];
+async function checkImageMagick(installHint: string): Promise<ToolCheck> {
+  // ImageMagick v7 uses a unified `magick` binary; v6 has standalone commands
+  const hasMagick = await commandExists('magick');
+  if (hasMagick) {
+    return { name: 'magick (ImageMagick)', available: true, installHint };
+  }
+  const hasConvert = await commandExists('convert');
+  return { name: 'magick (ImageMagick)', available: hasConvert, installHint };
+}
 
-  return Promise.all(
-    tools.map(async (t) => ({
-      ...t,
-      available: await commandExists(t.name),
+export async function checkX11Tools(): Promise<ToolCheck[]> {
+  const [xdotool, magick] = await Promise.all([
+    commandExists('xdotool').then((available) => ({
+      name: 'xdotool',
+      available,
+      installHint: 'sudo apt install xdotool',
     })),
-  );
+    checkImageMagick('sudo apt install imagemagick'),
+  ]);
+  return [xdotool, magick];
 }
 
 export async function checkSwayTools(): Promise<ToolCheck[]> {
-  const tools: Array<{ name: string; installHint: string }> = [
-    { name: 'swaymsg', installHint: 'sudo apt install sway' },
-    { name: 'grim', installHint: 'sudo apt install grim' },
-    { name: 'convert', installHint: 'sudo apt install imagemagick' },
-  ];
-
-  return Promise.all(
-    tools.map(async (t) => ({
-      ...t,
-      available: await commandExists(t.name),
+  const [swaymsg, grim, magick] = await Promise.all([
+    commandExists('swaymsg').then((available) => ({
+      name: 'swaymsg',
+      available,
+      installHint: 'sudo apt install sway',
     })),
-  );
+    commandExists('grim').then((available) => ({
+      name: 'grim',
+      available,
+      installHint: 'sudo apt install grim',
+    })),
+    checkImageMagick('sudo apt install imagemagick'),
+  ]);
+  return [swaymsg, grim, magick];
 }
 
 export async function checkHyprlandTools(): Promise<ToolCheck[]> {
-  const tools: Array<{ name: string; installHint: string }> = [
-    { name: 'hyprctl', installHint: 'Included with Hyprland' },
-    { name: 'grim', installHint: 'sudo apt install grim' },
-    { name: 'convert', installHint: 'sudo apt install imagemagick' },
-  ];
-
-  return Promise.all(
-    tools.map(async (t) => ({
-      ...t,
-      available: await commandExists(t.name),
+  const [hyprctl, grim, magick] = await Promise.all([
+    commandExists('hyprctl').then((available) => ({
+      name: 'hyprctl',
+      available,
+      installHint: 'Included with Hyprland',
     })),
-  );
+    commandExists('grim').then((available) => ({
+      name: 'grim',
+      available,
+      installHint: 'sudo apt install grim',
+    })),
+    checkImageMagick('sudo apt install imagemagick'),
+  ]);
+  return [hyprctl, grim, magick];
 }
 
 export async function checkMacOSTools(): Promise<ToolCheck[]> {
-  const tools: Array<{ name: string; installHint: string }> = [
-    { name: 'screencapture', installHint: 'Built-in on macOS' },
-    { name: 'osascript', installHint: 'Built-in on macOS' },
-    { name: 'sips', installHint: 'Built-in on macOS' },
-    { name: 'convert', installHint: 'brew install imagemagick' },
-  ];
-
-  return Promise.all(
-    tools.map(async (t) => ({
-      ...t,
-      available: await commandExists(t.name),
+  const [screencapture, osascript, sips, magick] = await Promise.all([
+    commandExists('screencapture').then((available) => ({
+      name: 'screencapture',
+      available,
+      installHint: 'Built-in on macOS',
     })),
-  );
+    commandExists('osascript').then((available) => ({
+      name: 'osascript',
+      available,
+      installHint: 'Built-in on macOS',
+    })),
+    commandExists('sips').then((available) => ({
+      name: 'sips',
+      available,
+      installHint: 'Built-in on macOS',
+    })),
+    checkImageMagick('brew install imagemagick'),
+  ]);
+  return [screencapture, osascript, sips, magick];
 }
 
 export async function ensureTools(displayServer: DisplayServer): Promise<void> {

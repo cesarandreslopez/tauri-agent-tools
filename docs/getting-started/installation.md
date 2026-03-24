@@ -24,7 +24,9 @@ Platform-specific tools are also needed for screenshot and window operations:
     sudo apt install xdotool imagemagick
     ```
 
-    Tools used: `xdotool` (window search/geometry), `import` (screenshot capture), `convert` (crop/resize).
+    Tools used: `xdotool` (window search/geometry), ImageMagick (screenshot capture via `import`, crop/resize via `convert`/`magick`).
+
+    Both ImageMagick v6 (`convert`) and v7 (`magick`) are supported automatically.
 
 === "Linux Wayland/Sway"
 
@@ -32,7 +34,7 @@ Platform-specific tools are also needed for screenshot and window operations:
     sudo apt install sway grim imagemagick
     ```
 
-    Tools used: `swaymsg` (window listing/geometry), `grim` (screenshot capture), `convert` (crop/resize).
+    Tools used: `swaymsg` (window listing/geometry), `grim` (screenshot capture), ImageMagick (crop/resize).
 
 === "Linux Wayland/Hyprland"
 
@@ -41,7 +43,7 @@ Platform-specific tools are also needed for screenshot and window operations:
     # hyprctl is included with Hyprland
     ```
 
-    Tools used: `hyprctl` (window listing/geometry), `grim` (screenshot capture), `convert` (crop/resize).
+    Tools used: `hyprctl` (window listing/geometry), `grim` (screenshot capture), ImageMagick (crop/resize).
 
 === "macOS"
 
@@ -49,7 +51,7 @@ Platform-specific tools are also needed for screenshot and window operations:
     brew install imagemagick
     ```
 
-    Built-in tools used: `screencapture`, `osascript`, `sips`. ImageMagick provides `convert` for crop/resize.
+    Built-in tools used: `screencapture`, `osascript`, `sips`. ImageMagick provides crop/resize.
 
     !!! note "Screen Recording Permission"
         Grant Screen Recording permission in **System Settings > Privacy & Security > Screen Recording** for your terminal app.

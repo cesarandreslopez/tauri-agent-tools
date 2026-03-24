@@ -15,7 +15,7 @@ graph TD
     BC --> BR[Tauri Bridge<br/>HTTP POST /eval]
     BR --> WV[Webview<br/>DOM + JS]
     CMD --> IMG[src/util/<br/>Image Pipeline]
-    IMG --> IM[ImageMagick<br/>convert]
+    IMG --> IM[ImageMagick<br/>magick / convert]
 ```
 
 ## Module System
@@ -63,10 +63,12 @@ Adapters are in `src/platform/`:
 
 | Adapter | File | Tools |
 |---------|------|-------|
-| X11 | `x11.ts` | `xdotool`, `import`, `convert` |
-| Wayland | `wayland.ts` | `swaymsg`, `grim`, `convert` |
-| Hyprland | `hyprland.ts` | `hyprctl`, `grim`, `convert` |
-| macOS | `macos.ts` | `screencapture`, `osascript`, `sips`, `convert` |
+| X11 | `x11.ts` | `xdotool`, ImageMagick (`import`) |
+| Wayland | `wayland.ts` | `swaymsg`, `grim` |
+| Hyprland | `hyprland.ts` | `hyprctl`, `grim` |
+| macOS | `macos.ts` | `screencapture`, `osascript`, `sips` |
+
+All adapters use ImageMagick for crop/resize operations via `src/util/image.ts`. The `magickCommand()` resolver in `src/util/magick.ts` auto-detects v6 (`convert`) vs v7 (`magick`) at runtime.
 
 ## Bridge Client
 
@@ -96,8 +98,8 @@ Also exports `discoverBridgesByPid()` for `list-windows` to map PIDs to bridge c
 
 `src/util/image.ts` handles image processing:
 
-- `cropImage(buffer, rect, format)` — crops via `convert` stdin/stdout
-- `resizeImage(buffer, maxWidth, format)` — resizes via `convert` stdin/stdout
+- `cropImage(buffer, rect, format)` — crops via ImageMagick stdin/stdout
+- `resizeImage(buffer, maxWidth, format)` — resizes via ImageMagick stdin/stdout
 - `computeCropRect(elementRect, viewport, windowGeometry)` — computes the crop region accounting for window decorations
 
 `src/util/exec.ts` provides the secure `exec()` wrapper:
@@ -116,5 +118,6 @@ Also exports `discoverBridgesByPid()` for `list-windows` to map PIDs to bridge c
 | `src/platform/detect.ts` | Display server detection |
 | `src/bridge/client.ts` | HTTP bridge client |
 | `src/bridge/tokenDiscovery.ts` | Token file scanning |
-| `src/util/image.ts` | ImageMagick operations |
+| `src/util/image.ts` | ImageMagick crop/resize operations |
+| `src/util/magick.ts` | ImageMagick v6/v7 version detection |
 | `src/util/exec.ts` | Secure process execution |

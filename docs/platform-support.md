@@ -38,19 +38,20 @@ flowchart TD
     | Tool | Package | Purpose |
     |------|---------|---------|
     | `xdotool` | `xdotool` | Window search, geometry, listing |
-    | `import` | `imagemagick` | Window screenshot capture |
-    | `convert` | `imagemagick` | Image crop and resize |
+    | ImageMagick | `imagemagick` | Screenshot capture (`import`), crop and resize |
 
     ```bash
     sudo apt install xdotool imagemagick
     ```
 
+    Both ImageMagick v6 (`convert`, `import`) and v7 (`magick`) are detected automatically.
+
     **How it works:**
 
     - `xdotool search --name <regex>` finds windows by title
     - `xdotool getwindowgeometry <id>` gets position and size
-    - `import -window <id> png:-` captures window pixels to stdout
-    - `convert` crops and resizes via stdin/stdout pipes
+    - `import -window <id> png:-` captures window pixels to stdout (v7: `magick import`)
+    - ImageMagick crops and resizes via stdin/stdout pipes
 
 === "Linux Wayland (Sway)"
 
@@ -60,7 +61,7 @@ flowchart TD
     |------|---------|---------|
     | `swaymsg` | `sway` | Window listing and geometry via IPC |
     | `grim` | `grim` | Screenshot capture |
-    | `convert` | `imagemagick` | Image crop and resize |
+    | ImageMagick | `imagemagick` | Image crop and resize |
 
     ```bash
     sudo apt install sway grim imagemagick
@@ -70,7 +71,7 @@ flowchart TD
 
     - `swaymsg -t get_tree` lists all windows with geometry
     - `grim -g <geometry>` captures a screen region
-    - `convert` crops and resizes via stdin/stdout pipes
+    - ImageMagick crops and resizes via stdin/stdout pipes
 
     !!! warning "Compositor Support"
         Other Wayland compositors (GNOME, KDE) would need their own adapters. Currently Sway and Hyprland are supported.
@@ -83,7 +84,7 @@ flowchart TD
     |------|---------|---------|
     | `hyprctl` | Hyprland | Window listing and geometry via IPC |
     | `grim` | `grim` | Screenshot capture |
-    | `convert` | `imagemagick` | Image crop and resize |
+    | ImageMagick | `imagemagick` | Image crop and resize |
 
     ```bash
     sudo apt install grim imagemagick
@@ -94,7 +95,7 @@ flowchart TD
 
     - `hyprctl clients -j` lists all windows with geometry as JSON
     - `grim -g <geometry>` captures a screen region
-    - `convert` crops and resizes via stdin/stdout pipes
+    - ImageMagick crops and resizes via stdin/stdout pipes
 
 === "macOS"
 
@@ -105,7 +106,7 @@ flowchart TD
     | `screencapture` | Built-in | Window screenshot capture |
     | `osascript` | Built-in | Window search and geometry via AppleScript |
     | `sips` | Built-in | Image format info |
-    | `convert` | `imagemagick` | Image crop and resize |
+    | ImageMagick | `imagemagick` | Image crop and resize |
 
     ```bash
     brew install imagemagick
@@ -115,7 +116,7 @@ flowchart TD
 
     - AppleScript queries `System Events` for window properties
     - `screencapture -l <windowId>` captures a specific window
-    - `convert` crops and resizes via stdin/stdout pipes
+    - ImageMagick crops and resizes via stdin/stdout pipes
 
     !!! note "Screen Recording Permission"
         macOS requires Screen Recording permission for `screencapture`. Grant it in **System Settings > Privacy & Security > Screen Recording** for your terminal application.

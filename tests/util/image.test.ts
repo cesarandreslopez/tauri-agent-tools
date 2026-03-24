@@ -6,6 +6,10 @@ vi.mock('../../src/util/exec.js', () => ({
   validateWindowId: vi.fn(),
 }));
 
+vi.mock('../../src/util/magick.js', () => ({
+  magickCommand: vi.fn((sub: string) => Promise.resolve({ bin: sub, args: [] })),
+}));
+
 import { exec } from '../../src/util/exec.js';
 const mockExec = vi.mocked(exec);
 
@@ -103,7 +107,7 @@ describe('Image utilities', () => {
       expect(result).toBe(output);
       expect(mockExec).toHaveBeenCalledWith(
         'convert',
-        ['png:-', '-resize', '800x\\>', 'png:-'],
+        ['png:-', '-resize', '800x>', 'png:-'],
         { stdin: input },
       );
     });

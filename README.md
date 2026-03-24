@@ -257,7 +257,7 @@ screenshot --selector ".toolbar" --title "My App"
   ├─► Compute crop region:
   │     element rect from bridge + viewport offset (outerHeight - innerHeight)
   │
-  └─► convert png:- -crop WxH+X+Y +repage png:- (crop to element)
+  └─► ImageMagick crop: png:- -crop WxH+X+Y +repage png:-
 ```
 
 The crop accounts for window decoration (title bar, borders) by comparing `window.innerHeight` from the bridge with the actual window height from `xdotool`.
@@ -295,7 +295,7 @@ This tool is a CLI that runs commands and exits — not a persistent MCP server.
 ## Safety Guarantees
 
 - **No input injection** — no mouse moves, clicks, keystrokes, or cursor changes
-- **No xcap crate** — uses `xdotool` + ImageMagick `import` (read-only X11 operations)
+- **No xcap crate** — uses `xdotool` + ImageMagick (read-only X11 operations)
 - **No daemon** — CLI runs and exits, no background processes
 - **No `.mcp.json`** — never auto-starts
 - **All OS interactions read-only** — `xdotool search`, `getwindowgeometry`, `import -window`

@@ -1,6 +1,7 @@
 import type { PlatformAdapter, WindowInfo } from '../types.js';
 import type { ImageFormat } from '../schemas/commands.js';
 import { exec, validateWindowId } from '../util/exec.js';
+import { magickCommand } from '../util/magick.js';
 
 function parseShellVar(output: string, key: string, fallback?: number): number {
   const match = output.match(new RegExp(`${key}=(\\d+)`));
@@ -24,7 +25,8 @@ export class X11Adapter implements PlatformAdapter {
   async captureWindow(windowId: string, format: ImageFormat): Promise<Buffer> {
     validateWindowId(windowId);
     const fmt = format === 'jpg' ? 'jpg' : 'png';
-    const { stdout } = await exec('import', ['-window', windowId, `${fmt}:-`]);
+    const cmd = await magickCommand('import');
+    const { stdout } = await exec(cmd.bin, [...cmd.args, '-window', windowId, `${fmt}:-`]);
     return stdout;
   }
 
