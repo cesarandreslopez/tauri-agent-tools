@@ -31,6 +31,8 @@ import { registerFocus } from './commands/interact/focus.js';
 import { registerNavigate } from './commands/interact/navigate.js';
 import { registerSelect } from './commands/interact/select.js';
 import { registerInvoke } from './commands/invoke.js';
+import { registerStoreInspect } from './commands/storeInspect.js';
+import { registerCheck } from './commands/check.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const pkg = PackageJsonSchema.parse(JSON.parse(readFileSync(resolve(__dirname, '..', 'package.json'), 'utf-8')));
@@ -82,6 +84,8 @@ registerFocus(program);
 registerNavigate(program);
 registerSelect(program);
 registerInvoke(program);
+registerStoreInspect(program);
+registerCheck(program);
 
 program.parseAsync().catch((err: unknown) => {
   console.error(err instanceof Error ? err.message : String(err));

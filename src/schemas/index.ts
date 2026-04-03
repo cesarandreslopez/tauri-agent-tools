@@ -21,6 +21,10 @@ export {
   type RustLogEntry,
   BridgeEvalResponseSchema,
   BridgeLogsResponseSchema,
+  DescribeResponseSchema,
+  type DescribeResponse,
+  VersionResponseSchema,
+  type VersionResponse,
 } from './bridge.js';
 
 export {
@@ -55,6 +59,12 @@ export {
   type DomMode,
   PackageJsonSchema,
   type PackageJson,
+  CheckItemSchema,
+  type CheckItem,
+  CheckResultSchema,
+  type CheckResult,
+  StoreInspectResultSchema,
+  type StoreInspectResult,
 } from './commands.js';
 
 export {
