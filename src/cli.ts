@@ -33,6 +33,7 @@ import { registerSelect } from './commands/interact/select.js';
 import { registerInvoke } from './commands/invoke.js';
 import { registerStoreInspect } from './commands/storeInspect.js';
 import { registerCheck } from './commands/check.js';
+import { registerProbe } from './commands/probe.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const pkg = PackageJsonSchema.parse(JSON.parse(readFileSync(resolve(__dirname, '..', 'package.json'), 'utf-8')));
@@ -86,6 +87,7 @@ registerSelect(program);
 registerInvoke(program);
 registerStoreInspect(program);
 registerCheck(program);
+registerProbe(program);
 
 program.parseAsync().catch((err: unknown) => {
   console.error(err instanceof Error ? err.message : String(err));

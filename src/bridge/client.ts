@@ -4,8 +4,10 @@ import {
   ViewportSizeSchema,
   BridgeEvalResponseSchema,
   BridgeLogsResponseSchema,
+  DescribeResponseSchema,
+  VersionResponseSchema,
 } from '../schemas/bridge.js';
-import type { ElementRect, RustLogEntry } from '../schemas/bridge.js';
+import type { ElementRect, RustLogEntry, DescribeResponse, VersionResponse } from '../schemas/bridge.js';
 import { A11yNodeSchema } from '../schemas/dom.js';
 import type { A11yNode } from '../schemas/dom.js';
 
@@ -164,6 +166,33 @@ export class BridgeClient {
       return true;
     } catch {
       return false;
+    }
+  }
+
+  async describe(): Promise<DescribeResponse | null> {
+    try {
+      const res = await fetch(`${this.baseUrl}/describe`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: this.token }),
+        signal: AbortSignal.timeout(5000),
+      });
+      if (!res.ok) return null;
+      return DescribeResponseSchema.parse(await res.json());
+    } catch {
+      return null;
+    }
+  }
+
+  async version(): Promise<VersionResponse | null> {
+    try {
+      const res = await fetch(`${this.baseUrl}/version`, {
+        signal: AbortSignal.timeout(5000),
+      });
+      if (!res.ok) return null;
+      return VersionResponseSchema.parse(await res.json());
+    } catch {
+      return null;
     }
   }
 }
