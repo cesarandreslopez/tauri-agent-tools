@@ -30,11 +30,6 @@ export function parseEnum<T extends [string, ...string[]]>(
   return result.data;
 }
 
-export interface BridgeOpts {
-  port?: number;
-  token?: string;
-}
-
 export function addBridgeOptions(cmd: Command): Command {
   return cmd
     .option('--port <number>', 'Bridge port (auto-discover if omitted)', parseInt)
