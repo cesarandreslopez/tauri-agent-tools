@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { BridgeClient } from '../../src/bridge/client.js';
@@ -7,6 +7,7 @@ const TEST_TOKEN = 'test-secret-token';
 
 let server: ReturnType<typeof createServer>;
 let port: number;
+let lastRequestBody: Record<string, unknown> | undefined;
 
 const SAMPLE_LOG_ENTRIES = [
   { timestamp: 1700000000000, level: 'info', target: 'myapp::db', message: 'Connected', source: 'rust' },
@@ -23,7 +24,8 @@ function handleRequest(req: IncomingMessage, res: ServerResponse): void {
   let body = '';
   req.on('data', (chunk: Buffer) => { body += chunk.toString(); });
   req.on('end', () => {
-    const data = JSON.parse(body);
+    const data = JSON.parse(body) as Record<string, unknown>;
+    lastRequestBody = data;
 
     if (data.token !== TEST_TOKEN) {
       res.writeHead(401);
@@ -81,9 +83,13 @@ afterAll(async () => {
 });
 
 describe('BridgeClient', () => {
-  function client(token = TEST_TOKEN) {
-    return new BridgeClient({ port, token });
+  function client(token = TEST_TOKEN, windowLabel?: string) {
+    return new BridgeClient({ port, token }, windowLabel);
   }
+
+  beforeEach(() => {
+    lastRequestBody = undefined;
+  });
 
   describe('eval', () => {
     it('evaluates expressions and returns results', async () => {
@@ -94,6 +100,20 @@ describe('BridgeClient', () => {
     it('returns numeric results', async () => {
       const result = await client().eval('1');
       expect(result).toBe(1);
+    });
+  });
+
+  describe('windowLabel', () => {
+    it('includes window field in eval request body when windowLabel is set', async () => {
+      await client(TEST_TOKEN, 'overlay').eval('1');
+      expect(lastRequestBody).toBeDefined();
+      expect(lastRequestBody!.window).toBe('overlay');
+    });
+
+    it('does NOT include window key in eval request body without windowLabel', async () => {
+      await client().eval('1');
+      expect(lastRequestBody).toBeDefined();
+      expect('window' in lastRequestBody!).toBe(false);
     });
   });
 

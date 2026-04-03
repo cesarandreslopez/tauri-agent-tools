@@ -12,17 +12,24 @@ import type { A11yNode } from '../schemas/dom.js';
 export class BridgeClient {
   private baseUrl: string;
   private token: string;
+  private windowLabel: string | undefined;
 
-  constructor(config: BridgeConfig) {
+  constructor(config: BridgeConfig, windowLabel?: string) {
     this.baseUrl = `http://127.0.0.1:${config.port}`;
     this.token = config.token;
+    this.windowLabel = windowLabel;
   }
 
   async eval(js: string, timeout = 5000): Promise<unknown> {
+    const body: Record<string, unknown> = { js, token: this.token };
+    if (this.windowLabel !== undefined) {
+      body.window = this.windowLabel;
+    }
+
     const res = await fetch(`${this.baseUrl}/eval`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ js, token: this.token }),
+      body: JSON.stringify(body),
       signal: AbortSignal.timeout(timeout),
     });
 
