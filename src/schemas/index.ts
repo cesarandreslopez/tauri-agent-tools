@@ -64,3 +64,18 @@ export {
   SwayNodeSchema,
   type SwayNode,
 } from './platform.js';
+
+export {
+  InteractionResultSchema,
+  type InteractionResult,
+  ClickResultSchema,
+  type ClickResult,
+  TypeResultSchema,
+  type TypeResult,
+  ScrollResultSchema,
+  type ScrollResult,
+  SelectResultSchema,
+  type SelectResult,
+  InvokeResultSchema,
+  type InvokeResult,
+} from './interact.js';
