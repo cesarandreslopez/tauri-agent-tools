@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-**tauri-agent-tools** — A TypeScript CLI tool for agent-driven inspection of Tauri desktop applications. Captures real platform pixels of DOM elements by combining `getBoundingClientRect` positions with native screenshot tools (not canvas renders). All commands are read-only.
+**tauri-agent-tools** — A TypeScript CLI tool for agent-driven inspection and interaction with Tauri desktop applications. Captures real platform pixels of DOM elements by combining `getBoundingClientRect` positions with native screenshot tools (not canvas renders). Inspection commands are read-only. Interaction commands (click, type, scroll, etc.) are debug-only.
 
 ## Commands
 
@@ -24,10 +24,11 @@ npx vitest run tests/commands/screenshot.test.ts
 
 | Location | Purpose |
 |----------|---------|
-| `src/cli.ts` | Entry point — registers all 14 commands via `commander` |
-| `src/schemas/` | Zod schemas split by domain: `bridge.ts`, `dom.ts`, `commands.ts`, `platform.ts` |
+| `src/cli.ts` | Entry point — registers all 25 commands via `commander` |
+| `src/schemas/` | Zod schemas split by domain: `bridge.ts`, `dom.ts`, `commands.ts`, `platform.ts`, `interact.ts` |
 | `src/types.ts` | Pure interfaces: `WindowInfo`, `PlatformAdapter`, `DisplayServer`, `WindowListEntry` |
-| `src/commands/` | One file per command (`screenshot.ts`, `dom.ts`, `eval.ts`, `wait.ts`, `info.ts`, `listWindows.ts`, `ipcMonitor.ts`, `consoleMonitor.ts`, `rustLogs.ts`, `storage.ts`, `pageState.ts`, `diff.ts`, `mutations.ts`, `snapshot.ts`) |
+| `src/commands/` | One file per command (`screenshot.ts`, `dom.ts`, `eval.ts`, `wait.ts`, `info.ts`, `listWindows.ts`, `ipcMonitor.ts`, `consoleMonitor.ts`, `rustLogs.ts`, `storage.ts`, `pageState.ts`, `diff.ts`, `mutations.ts`, `snapshot.ts`, `check.ts`, `capture.ts`, `probe.ts`, `invoke.ts`, `storeInspect.ts`) |
+| `src/commands/interact/` | Interaction commands: `click.ts`, `type.ts`, `scroll.ts`, `focus.ts`, `navigate.ts`, `select.ts`, `shared.ts` |
 | `src/commands/shared.ts` | `addBridgeOptions()` and `resolveBridge()` — shared bridge option wiring |
 | `src/platform/detect.ts` | `detectDisplayServer()` and `ensureTools()` — runtime platform detection |
 | `src/platform/x11.ts` | X11 adapter: `xdotool` + ImageMagick `import` |
@@ -45,7 +46,7 @@ npx vitest run tests/commands/screenshot.test.ts
 
 **Module system:** ESM (`"type": "module"`) with NodeNext resolution. All imports must use `.js` extensions (pointing to compiled output).
 
-**Entry point:** `src/cli.ts` registers 14 commands via `commander`. Each command is in `src/commands/`.
+**Entry point:** `src/cli.ts` registers 25 commands via `commander`. Each command is in `src/commands/` or `src/commands/interact/`.
 
 **Command registration pattern:** Each command file exports a `registerXxx(program, ...)` function. Commands that need the platform adapter receive `getAdapter` as a parameter. Commands that need the bridge use `resolveBridge()` from `shared.ts`, which handles auto-discovery or explicit `--port`/`--token`.
 
@@ -64,7 +65,8 @@ npx vitest run tests/commands/screenshot.test.ts
 ## Key Constraints
 
 - **Security:** Uses `execFile()` with array args everywhere — never `exec()` with shell strings. Window IDs validated with `/^\d+$/` before use.
-- **No write operations:** No input injection, no state modification. This is a deliberate design choice, not a limitation.
+- **Interaction commands are debug-only:** Click, type, scroll, focus, navigate, select, and invoke only work with the dev bridge (debug builds). They use eval-based DOM event dispatch.
+- **Inspection commands are read-only:** No state modification from inspection commands. This is a deliberate design choice.
 - **Node >=20 required:** Uses native `fetch()` (no HTTP library dependency).
 - **TypeScript strict mode** with `noUncheckedIndexedAccess`, `noImplicitReturns`, `noFallthroughCasesInSwitch` enabled. Declarations generated to `dist/`.
 - **Tests use vitest globals:** `describe`, `it`, `expect` available without imports.
@@ -113,7 +115,7 @@ Dependencies flow strictly downward. Enforced by `scripts/check-imports.mjs`.
 
 ```bash
 npx tsc --noEmit                              # Type check
-npm test                                      # All tests (366 tests, 32 files)
+npm test                                      # All tests (623+ tests, 45 files)
 node scripts/check-imports.mjs                # Import DAG linter
 npx madge --circular --extensions ts,tsx src/  # Circular dependency check
 ```
