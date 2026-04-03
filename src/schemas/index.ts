@@ -55,6 +55,8 @@ export {
   type DomMode,
   PackageJsonSchema,
   type PackageJson,
+  CaptureManifestSchema,
+  type CaptureManifest,
 } from './commands.js';
 
 export {

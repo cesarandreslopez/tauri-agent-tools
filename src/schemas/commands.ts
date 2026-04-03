@@ -88,6 +88,18 @@ export type StorageType = z.infer<typeof StorageTypeSchema>;
 export const DomModeSchema = z.enum(['dom', 'accessibility']);
 export type DomMode = z.infer<typeof DomModeSchema>;
 
+// === Capture manifest ===
+
+export const CaptureManifestSchema = z.object({
+  timestamp: z.string(),
+  url: z.string().optional(),
+  title: z.string().optional(),
+  viewport: z.object({ width: z.number(), height: z.number() }).optional(),
+  errorCount: z.number().optional(),
+  files: z.record(z.string(), z.string()),
+});
+export type CaptureManifest = z.infer<typeof CaptureManifestSchema>;
+
 // === CLI: package.json ===
 
 export const PackageJsonSchema = z.object({

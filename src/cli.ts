@@ -24,6 +24,7 @@ import { registerMutations } from './commands/mutations.js';
 import { registerSnapshot } from './commands/snapshot.js';
 import { registerDiff } from './commands/diff.js';
 import { registerRustLogs } from './commands/rustLogs.js';
+import { registerCapture } from './commands/capture.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const pkg = PackageJsonSchema.parse(JSON.parse(readFileSync(resolve(__dirname, '..', 'package.json'), 'utf-8')));
@@ -68,6 +69,7 @@ registerMutations(program);
 registerSnapshot(program, getAdapter);
 registerDiff(program);
 registerRustLogs(program);
+registerCapture(program, getAdapter);
 
 program.parseAsync().catch((err: unknown) => {
   console.error(err instanceof Error ? err.message : String(err));
