@@ -24,6 +24,13 @@ import { registerMutations } from './commands/mutations.js';
 import { registerSnapshot } from './commands/snapshot.js';
 import { registerDiff } from './commands/diff.js';
 import { registerRustLogs } from './commands/rustLogs.js';
+import { registerClick } from './commands/interact/click.js';
+import { registerType } from './commands/interact/type.js';
+import { registerScroll } from './commands/interact/scroll.js';
+import { registerFocus } from './commands/interact/focus.js';
+import { registerNavigate } from './commands/interact/navigate.js';
+import { registerSelect } from './commands/interact/select.js';
+import { registerInvoke } from './commands/invoke.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const pkg = PackageJsonSchema.parse(JSON.parse(readFileSync(resolve(__dirname, '..', 'package.json'), 'utf-8')));
@@ -68,6 +75,13 @@ registerMutations(program);
 registerSnapshot(program, getAdapter);
 registerDiff(program);
 registerRustLogs(program);
+registerClick(program);
+registerType(program);
+registerScroll(program);
+registerFocus(program);
+registerNavigate(program);
+registerSelect(program);
+registerInvoke(program);
 
 program.parseAsync().catch((err: unknown) => {
   console.error(err instanceof Error ? err.message : String(err));
