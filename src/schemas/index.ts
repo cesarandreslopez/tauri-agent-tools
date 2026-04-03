@@ -65,6 +65,8 @@ export {
   type CheckResult,
   StoreInspectResultSchema,
   type StoreInspectResult,
+  CaptureManifestSchema,
+  type CaptureManifest,
 } from './commands.js';
 
 export {

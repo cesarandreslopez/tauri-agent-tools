@@ -34,6 +34,7 @@ import { registerInvoke } from './commands/invoke.js';
 import { registerStoreInspect } from './commands/storeInspect.js';
 import { registerCheck } from './commands/check.js';
 import { registerProbe } from './commands/probe.js';
+import { registerCapture } from './commands/capture.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const pkg = PackageJsonSchema.parse(JSON.parse(readFileSync(resolve(__dirname, '..', 'package.json'), 'utf-8')));
@@ -88,6 +89,7 @@ registerInvoke(program);
 registerStoreInspect(program);
 registerCheck(program);
 registerProbe(program);
+registerCapture(program, getAdapter);
 
 program.parseAsync().catch((err: unknown) => {
   console.error(err instanceof Error ? err.message : String(err));
