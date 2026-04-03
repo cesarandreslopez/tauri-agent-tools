@@ -1,6 +1,6 @@
 import { Command } from 'commander';
 import { resolveBridge } from '../shared.js';
-import type { BridgeOpts } from './shared.js';
+import type { BridgeOpts } from '../shared.js';
 import { addInteractOptions, escapeSelector } from './shared.js';
 import { TypeResultSchema } from '../../schemas/interact.js';
 
@@ -46,7 +46,7 @@ Examples:
 
   addInteractOptions(cmd);
 
-  cmd.action(async (selector: string, text: string, opts: BridgeOpts & { clear?: boolean }) => {
+  cmd.action(async (selector: string, text: string, opts: BridgeOpts & { clear?: boolean; json?: boolean }) => {
     const bridge = await resolveBridge(opts);
     const script = buildTypeScript(selector, text, !!opts.clear);
     const raw = await bridge.eval(script);
@@ -59,7 +59,7 @@ Examples:
     if (opts.json) {
       console.log(JSON.stringify(result, null, 2));
     } else {
-      console.log(`Typed into ${result.tagName.toLowerCase()}${selector !== result.selector ? '' : ''}: "${result.value}"`);
+      console.log(`Typed into ${(result.tagName ?? 'element').toLowerCase()}: "${result.value}"`);
     }
   });
 
