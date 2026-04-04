@@ -74,7 +74,7 @@ fn main() {
 Start your Tauri app in dev mode, then:
 
 ```bash
-tauri-agent-tools list-windows --tauri
+tauri-agent-tools probe --json
 tauri-agent-tools dom --depth 2
 ```
 
@@ -110,7 +110,8 @@ sequenceDiagram
 - **Localhost only** — the bridge binds to `127.0.0.1`
 - **Token authenticated** — every request requires a random 32-character token
 - **Development only** — wrapped in `cfg!(debug_assertions)`, stripped in release builds
-- **Read-only** — tauri-agent-tools only reads DOM state, never injects input
+- **Inspection is read-only** — inspection commands only read DOM state
+- **Interaction is debug-only** — interaction commands use eval-based DOM dispatch, sandboxed to the webview
 
 ## Troubleshooting
 

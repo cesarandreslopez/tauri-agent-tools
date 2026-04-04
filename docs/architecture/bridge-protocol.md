@@ -2,20 +2,30 @@
 
 The bridge is a lightweight HTTP server embedded in the Tauri app during development. It enables tauri-agent-tools to evaluate JavaScript in the webview.
 
-## Protocol Specification
+## Endpoints
 
-### Endpoint
+The bridge exposes four HTTP endpoints:
+
+| Endpoint | Method | Auth | Purpose |
+|----------|--------|------|---------|
+| `/eval` | POST | token | Evaluate JS in a webview (supports `window` param for multi-window) |
+| `/logs` | POST | token | Drain Rust tracing logs and sidecar output |
+| `/describe` | POST | token | Report PID, window labels, and capabilities |
+| `/version` | GET | none | Bridge version and available endpoints |
+
+## Eval Endpoint
+
+### Request
 
 ```
 POST http://127.0.0.1:{port}/eval
 ```
 
-### Request
-
 ```json
 {
   "js": "document.title",
-  "token": "a1b2c3d4e5f6..."
+  "token": "a1b2c3d4e5f6...",
+  "window": "main"
 }
 ```
 
@@ -23,6 +33,7 @@ POST http://127.0.0.1:{port}/eval
 |-------|------|-------------|
 | `js` | string | JavaScript expression to evaluate in the webview |
 | `token` | string | 32-character authentication token |
+| `window` | string? | Target webview window label (default: `"main"`) |
 
 ### Response
 
@@ -113,7 +124,8 @@ Token files are written to the system temp directory (`/tmp/` on Linux/macOS):
 - **Token auth** — prevents unauthorized access from other local processes
 - **Debug only** — wrapped in `cfg!(debug_assertions)`, compiled out of release builds
 - **Cleanup** — token file deleted on exit via `scopeguard`
-- **Read-only** — the CLI only evaluates JS, never injects input events
+- **Inspection is read-only** — inspection commands only evaluate JS, never inject input events
+- **Interaction is debug-only** — interaction commands use eval-based DOM dispatch, sandboxed to the webview
 
 ## Log Capture Endpoint
 
@@ -173,6 +185,60 @@ POST http://127.0.0.1:{port}/logs
 - Calling `/logs` **drains** the buffer — each entry is returned only once
 - The buffer holds up to 1000 entries; oldest entries are dropped on overflow
 - The buffer is populated by a `tracing::Layer` (Rust logs) and background reader threads (sidecar stdout/stderr)
+
+## Version Endpoint
+
+### Request
+
+```
+GET http://127.0.0.1:{port}/version
+```
+
+No authentication required.
+
+### Response
+
+```json
+{
+  "version": "0.6.0",
+  "endpoints": ["/eval", "/logs", "/describe", "/version"]
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `version` | string | Bridge protocol version |
+| `endpoints` | string[] | Available endpoint paths |
+
+## Describe Endpoint
+
+### Request
+
+```
+POST http://127.0.0.1:{port}/describe
+```
+
+```json
+{
+  "token": "a1b2c3d4e5f6..."
+}
+```
+
+### Response
+
+```json
+{
+  "pid": 12345,
+  "windows": ["main", "overlay", "settings"],
+  "capabilities": ["eval", "logs", "describe"]
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `pid` | number? | Process ID of the Tauri app |
+| `windows` | string[]? | Registered webview window labels |
+| `capabilities` | string[] | Available bridge capabilities |
 
 ## Error Handling
 

@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-04-04
+
+### Added
+
+- **Interaction commands** — `click`, `type`, `scroll`, `focus`, `navigate`, `select` for agent-driven UI interaction (debug builds only)
+- `invoke` command — call Tauri IPC commands from the CLI with JSON payload support
+- `store-inspect` command — inspect reactive store state (Pinia, Vue devtools, custom `__DEBUG_STORES__` hook)
+- `capture` command — collect screenshot + DOM + page state + storage into a single debug evidence bundle
+- `check` command — structured assertions against DOM state with pass/fail results
+- `probe` command — target discovery and bridge health check
+- `eval --file` option — load JavaScript from a file instead of inline string
+- `--pid` and `--window-label` bridge options for multi-app and multi-window targeting
+- `BridgeClient` multi-window eval via optional `windowLabel` parameter
+- Zod schemas for interaction command results (`schemas/interact.ts`)
+- Shared interaction utilities: `escapeSelector()`, `buildFindElementScript()`
+
+### Changed
+
+- Rust bridge example: added `/version` and `/describe` endpoints, multi-window eval support
+- Command count increased from 14 to 25
+
 ## [0.5.1] - 2026-03-24
 
 ### Added

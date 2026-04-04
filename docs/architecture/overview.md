@@ -4,7 +4,7 @@
 
 ```mermaid
 graph TD
-    CLI[src/cli.ts<br/>Entry Point] --> CMD[src/commands/<br/>15 Commands]
+    CLI[src/cli.ts<br/>Entry Point] --> CMD[src/commands/<br/>25 Commands]
     CMD --> PA[src/platform/<br/>Platform Adapters]
     CMD --> BC[src/bridge/<br/>Bridge Client]
     PA --> X11[X11 Adapter<br/>xdotool + import]
@@ -26,7 +26,7 @@ graph TD
 
 ## Entry Point
 
-`src/cli.ts` creates the `commander` program and registers all 14 commands. It also manages:
+`src/cli.ts` creates the `commander` program and registers all 25 commands. It also manages:
 
 - **Platform adapter creation** via `getAdapter()` — lazy initialization with tool checking
 - **Display server detection** — delegates to `detectDisplayServer()` in `src/platform/detect.ts`
@@ -36,13 +36,15 @@ graph TD
 Each command file exports a `registerXxx(program, ...)` function:
 
 - **Platform-dependent commands** (`screenshot`, `info`, `wait`, `list-windows`) receive `getAdapter` as a parameter
-- **Bridge-dependent commands** (`dom`, `eval`, `ipc-monitor`, `console-monitor`, `storage`, `page-state`, `mutations`) use `resolveBridge()` from `shared.ts`
+- **Bridge-dependent commands** (`dom`, `eval`, `ipc-monitor`, `console-monitor`, `storage`, `page-state`, `mutations`, `click`, `type`, `scroll`, `focus`, `navigate`, `select`, `invoke`, `capture`, `check`, `store-inspect`) use `resolveBridge()` from `shared.ts`
 - **Both** (`screenshot` with `--selector`, `wait`, `snapshot`) use both adapter and bridge
 - **Local-only commands** (`diff`) operate on local files with no bridge or adapter
+- **Optional bridge** (`probe`) works standalone but provides richer output with a bridge
 
-`src/commands/shared.ts` provides two utilities:
+`src/commands/shared.ts` provides shared utilities:
 
-- `addBridgeOptions(cmd)` — adds `--port` and `--token` options to a command
+- `addBridgeOptions(cmd)` — adds `--port`, `--token`, `--pid`, and `--window-label` options to a command
+- `addInteractOptions(cmd)` — extends `addBridgeOptions` with `--json` flag for interaction commands
 - `resolveBridge(opts)` — auto-discovers or uses explicit bridge config, returns `BridgeClient`
 
 ## Platform Adapter Interface

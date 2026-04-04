@@ -87,5 +87,5 @@ tauri-agent-tools eval "document.querySelectorAll('.item').length"
 ## What's Next
 
 - [Bridge Setup](bridge-setup.md) — add the Rust bridge to your Tauri app
-- [Command Reference](../commands/index.md) — all 14 commands with full options
+- [Command Reference](../commands/index.md) — all 25 commands with full options
 - [Platform Support](../platform-support.md) — platform-specific details

@@ -1,6 +1,6 @@
 # tauri-agent-tools
 
-CLI tool for agent-driven inspection of Tauri desktop applications. **Not an MCP server** — invoke commands directly via shell.
+CLI tool for agent-driven inspection and interaction with Tauri desktop applications. **Not an MCP server** — invoke commands directly via shell.
 
 ## Agent Skills
 
@@ -8,23 +8,25 @@ This package includes two [Agent Skills](https://agentskills.io):
 
 | Skill | Path | Purpose |
 |-------|------|---------|
-| `tauri-agent-tools` | `.agents/skills/tauri-agent-tools/SKILL.md` | Using the 14 CLI commands to inspect Tauri apps |
+| `tauri-agent-tools` | `.agents/skills/tauri-agent-tools/SKILL.md` | Using all 25 CLI commands to inspect and interact with Tauri apps |
 | `tauri-bridge-setup` | `.agents/skills/tauri-bridge-setup/SKILL.md` | Adding the Rust dev bridge to a Tauri project |
 
 ## Quick Reference
 
 **Install:** `npm install -g tauri-agent-tools`
 
-**All commands are read-only.** No input injection, no writes, no side effects.
+**Inspection commands are read-only.** Interaction commands (click, type, scroll, etc.) are debug-only — they only work with the dev bridge.
 
 **Standalone commands** (no bridge needed):
-`list-windows`, `info`, `screenshot --title`, `wait --title`
+`list-windows`, `info`, `screenshot --title`, `wait --title`, `diff`
 
 **Bridge-required commands** (Tauri app must have dev bridge running):
-`dom`, `eval`, `screenshot --selector`, `wait --selector/--eval`, `ipc-monitor`, `console-monitor`, `rust-logs`, `storage`, `page-state`, `mutations`, `snapshot`
+`dom`, `eval`, `screenshot --selector`, `wait --selector/--eval`, `ipc-monitor`, `console-monitor`, `rust-logs`, `storage`, `page-state`, `mutations`, `snapshot`, `click`, `type`, `scroll`, `focus`, `navigate`, `select`, `invoke`, `capture`, `check`, `store-inspect`
 
-**Local-only commands** (no bridge needed):
-`diff`
+**Optional bridge:**
+`probe` (works standalone to discover bridges, richer output with bridge)
+
+**Multi-app targeting:** Use `--pid <n>` to target a specific app. Use `--window-label <label>` for multi-window apps.
 
 **Bridge auto-discovery:** The CLI finds the running bridge via token files in `/tmp/tauri-dev-bridge-*.token`. No manual configuration needed.
 

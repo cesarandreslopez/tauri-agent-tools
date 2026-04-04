@@ -1,15 +1,26 @@
 ---
 name: tauri-bridge-setup
 description: How to add the tauri-agent-tools Rust dev bridge to a Tauri application
-version: 0.4.0
-tags: [tauri, rust, bridge, setup, integration]
+version: 0.6.0
+tags: [tauri, rust, bridge, setup, integration, multi-window]
 ---
 
 # Tauri Dev Bridge Setup
 
-Add the dev bridge to a Tauri app so `tauri-agent-tools` can inspect DOM, evaluate JS, monitor IPC, and take element screenshots.
+Add the dev bridge to a Tauri app so `tauri-agent-tools` can inspect DOM, evaluate JS, monitor IPC, take element screenshots, and interact with the UI.
 
 The bridge runs **only in debug builds** and is stripped from release builds automatically.
+
+## Bridge Endpoints
+
+The bridge exposes four HTTP endpoints on a random localhost port:
+
+| Endpoint | Method | Auth | Purpose |
+|----------|--------|------|---------|
+| `/eval` | POST | token | Evaluate JS in a webview (supports `window` param for multi-window) |
+| `/logs` | POST | token | Drain Rust tracing logs and sidecar output |
+| `/describe` | POST | token | Report PID, window labels, and capabilities |
+| `/version` | GET | none | Bridge version and available endpoints |
 
 ## Step 1 — Add Cargo dependencies
 
@@ -91,14 +102,35 @@ If you already have a `.setup()` call, add the `if cfg!(debug_assertions) { ... 
 Build and run the Tauri app in dev mode, then:
 
 ```bash
-# Should show your app with a bridge indicator
-tauri-agent-tools list-windows --tauri
+# Discover the bridge and check health
+tauri-agent-tools probe --json
 
 # Should return DOM tree
 tauri-agent-tools dom --depth 2
 ```
 
-Both commands succeeding confirms the bridge is working.
+Both commands succeeding confirms the bridge is working. The `probe` output shows bridge version, available endpoints, window labels, and PID.
+
+## Multi-Window Apps
+
+The bridge supports evaluating JS in any named webview window. The `/eval` endpoint accepts an optional `window` field (defaults to `"main"`). The `/describe` endpoint reports all registered window labels.
+
+From the CLI, use `--window-label` to target a specific window:
+
+```bash
+# Eval in a secondary window
+tauri-agent-tools eval "document.title" --window-label overlay --json
+
+# Screenshot a specific window's element
+tauri-agent-tools screenshot --selector ".content" --window-label settings -o /tmp/settings.png
+```
+
+Use `probe` to discover available windows:
+
+```bash
+tauri-agent-tools probe --json
+# → { "bridges": [{ "windows": ["main", "overlay", "settings"], ... }] }
+```
 
 ## Optional: Sidecar Log Capture
 
@@ -134,3 +166,7 @@ Then monitor with: `tauri-agent-tools rust-logs --source sidecar --duration 1000
 **Port conflicts:**
 - The bridge picks a random port. If it fails, check the app's stderr for "Failed to start dev bridge".
 - Ensure no firewall blocks localhost connections.
+
+**Multi-window eval fails:**
+- Verify the window label matches exactly (case-sensitive). Use `probe --json` to list available labels.
+- The default label is `"main"` — omit `--window-label` to target it.

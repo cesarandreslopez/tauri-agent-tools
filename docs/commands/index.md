@@ -1,6 +1,6 @@
 # Command Reference
 
-tauri-agent-tools provides 14 read-only commands for inspecting Tauri applications.
+tauri-agent-tools provides 25 commands for inspecting, interacting with, and monitoring Tauri applications. Inspection commands are read-only. Interaction commands are debug-only (require the dev bridge).
 
 ## Command Summary
 
@@ -20,6 +20,17 @@ tauri-agent-tools provides 14 read-only commands for inspecting Tauri applicatio
 | [`diff`](diff.md) | No | Compare two screenshots with difference metrics |
 | [`mutations`](mutations.md) | Yes | Watch DOM mutations on a CSS selector |
 | [`snapshot`](snapshot.md) | Yes | Capture screenshot + DOM + page state + storage in one shot |
+| `click` | Yes | Click a DOM element |
+| `type` | Yes | Type text into an input |
+| `scroll` | Yes | Scroll window or element |
+| `focus` | Yes | Focus a DOM element |
+| `navigate` | Yes | Navigate within the app |
+| `select` | Yes | Select dropdown value or toggle checkbox |
+| `invoke` | Yes | Invoke a Tauri IPC command |
+| `probe` | Optional | Discover running bridges and check health |
+| `capture` | Yes | Full debug evidence bundle |
+| `check` | Yes | Structured assertions (exit 0/1) |
+| `store-inspect` | Yes | Inspect reactive store state |
 
 ## Categories
 
@@ -32,7 +43,7 @@ tauri-agent-tools provides 14 read-only commands for inspecting Tauri applicatio
 ### DOM Inspection
 
 - **[dom](dom.md)** — explore DOM tree structure, accessibility tree, computed styles
-- **[eval](eval.md)** — run arbitrary JS expressions in the webview
+- **[eval](eval.md)** — run arbitrary JS expressions in the webview (supports `--file` for loading from files)
 
 ### Monitoring
 
@@ -45,12 +56,29 @@ tauri-agent-tools provides 14 read-only commands for inspecting Tauri applicatio
 
 - **[storage](storage.md)** — read localStorage, sessionStorage, and cookies
 - **[page-state](page-state.md)** — URL, title, viewport, scroll position, Tauri detection
+- **store-inspect** — inspect reactive store state (Pinia, Vue devtools, custom hooks)
 
 ### Window Management
 
 - **[info](info.md)** — window geometry, position, display server
 - **[list-windows](list-windows.md)** — enumerate windows with Tauri detection
 - **[wait](wait.md)** — poll for windows, DOM elements, or JS conditions
+
+### Interaction (debug-only)
+
+- **click** — click, double-click, or right-click a DOM element
+- **type** — type text into an input field (supports `--clear`)
+- **scroll** — scroll by pixels, to top/bottom, or scroll an element into view
+- **focus** — focus a DOM element
+- **navigate** — navigate to a route or URL
+- **select** — select a dropdown value or toggle a checkbox
+- **invoke** — call a Tauri IPC command with JSON payload
+
+### Workflow
+
+- **probe** — discover running bridges, check health, list window labels
+- **capture** — collect screenshot + DOM + page state + storage + console errors + Rust logs into a bundle
+- **check** — run structured assertions against DOM state (selector exists, text matches, no console errors)
 
 ## Common Patterns
 

@@ -4,7 +4,7 @@
 
 **Agent-driven inspection toolkit for Tauri desktop apps**
 
-14 read-only commands to screenshot, inspect, and monitor Tauri apps from the CLI.
+25 commands to screenshot, inspect, interact with, and monitor Tauri apps from the CLI.
 
 [![CI](https://github.com/cesarandreslopez/tauri-agent-tools/actions/workflows/ci.yml/badge.svg)](https://github.com/cesarandreslopez/tauri-agent-tools/actions/workflows/ci.yml)
 [![npm version](https://img.shields.io/npm/v/tauri-agent-tools.svg)](https://www.npmjs.com/package/tauri-agent-tools)
@@ -121,7 +121,14 @@ Evaluate a JavaScript expression in the Tauri app.
 
 ```bash
 tauri-agent-tools eval "document.title"
+tauri-agent-tools eval --file script.js
 ```
+
+| Option | Description |
+|--------|-------------|
+| `<js-expression>` | Inline JavaScript to evaluate |
+| `--file <path>` | Load JavaScript from a file instead |
+| `--window-label <label>` | Target a specific webview window (default: main) |
 
 ### `wait`
 
@@ -244,6 +251,39 @@ Monitor Rust backend logs and sidecar output in real-time. Unlike `console-monit
 | `--duration <ms>` | Auto-stop after N milliseconds |
 | `--json` | Output one JSON object per line |
 
+### Interaction Commands
+
+Interaction commands dispatch DOM events inside the webview. They require the dev bridge (debug builds only).
+
+| Command | Description |
+|---------|-------------|
+| `click <selector>` | Click a DOM element (`--double`, `--right`, `--wait <ms>`) |
+| `type <selector> <text>` | Type text into an input (`--clear` to empty first) |
+| `scroll` | Scroll window or element (`--by <px>`, `--to-top`, `--to-bottom`, `--into-view`) |
+| `focus <selector>` | Focus a DOM element |
+| `navigate <target>` | Navigate within the app (route path or URL) |
+| `select <selector> [value]` | Select dropdown value or toggle checkbox (`--toggle`) |
+| `invoke <command> [args-json]` | Invoke a Tauri IPC command |
+
+### Workflow Commands
+
+| Command | Description |
+|---------|-------------|
+| `probe` | Discover running bridges, check health, list windows |
+| `capture -o <dir>` | Full debug evidence bundle (screenshot, DOM, page state, storage, console errors, Rust logs) |
+| `check` | Structured assertions (`--selector`, `--text`, `--eval`, `--no-errors`) — exits 0/1 |
+| `store-inspect` | Inspect reactive store state (Pinia, Vue devtools, custom hooks) |
+
+### Targeting Flags
+
+All bridge-dependent commands support:
+
+| Flag | Description |
+|------|-------------|
+| `--port <n>` / `--token <s>` | Explicit bridge config (skips auto-discovery) |
+| `--pid <n>` | Target a specific app by PID |
+| `--window-label <label>` | Target a specific webview window (default: main) |
+
 ## How It Works
 
 ```
@@ -274,14 +314,13 @@ The crop accounts for window decoration (title bar, borders) by comparing `windo
 
 ## Design Decisions
 
-### Why no write operations
+### Inspection is read-only, interaction is debug-only
 
-All commands are read-only. We don't inject clicks, keystrokes, scroll events, or any input into the Tauri webview. Reasons:
+Inspection commands (screenshot, dom, eval, storage, etc.) are strictly read-only — they never modify app state. Interaction commands (click, type, scroll, focus, navigate, select, invoke) use eval-based DOM event dispatch and **only work with the dev bridge** (debug builds). Native input injection (xdotool, Accessibility API) is deliberately avoided:
 
-- **Native input injection is risky.** X11 input injection (e.g. via `xdotool`) operates system-wide, not per-window — it can grab the mouse cursor and require a hard reboot to recover.
-- **Simulated events don't work.** `dispatchEvent()` creates events with `isTrusted: false`. Frameworks (React, Vue, Angular) and browsers reject untrusted events for security-sensitive operations.
-- **Input injection is fragile across platforms.** X11 (`xdotool`), Wayland (no global input protocol by design), and macOS (requires Accessibility permission + sandbox restrictions) each have different security models. A cross-platform injection layer would be unreliable.
-- **Read-only is a safer contract for dev tool automation.** Tools that can only observe cannot corrupt application state, trigger unintended side effects, or create security vulnerabilities in CI pipelines.
+- **Native input is system-wide and risky.** X11 injection operates globally, not per-window — it can grab the cursor and require a hard reboot.
+- **Eval-based dispatch is per-window and sandboxed.** Interaction commands dispatch DOM events inside the webview via the bridge. They can't affect other apps or the OS.
+- **Debug-only by design.** The bridge is compiled out of release builds (`cfg!(debug_assertions)`), so interaction commands cannot run against production apps.
 
 ### Why no MCP server mode
 
@@ -294,11 +333,12 @@ This tool is a CLI that runs commands and exits — not a persistent MCP server.
 
 ## Safety Guarantees
 
-- **No input injection** — no mouse moves, clicks, keystrokes, or cursor changes
+- **No native input injection** — no xdotool type/mousemove, no Accessibility API sends. Interaction commands use eval-based DOM dispatch inside the webview only.
 - **No xcap crate** — uses `xdotool` + ImageMagick (read-only X11 operations)
 - **No daemon** — CLI runs and exits, no background processes
 - **No `.mcp.json`** — never auto-starts
-- **All OS interactions read-only** — `xdotool search`, `getwindowgeometry`, `import -window`
+- **Inspection commands are read-only** — `xdotool search`, `getwindowgeometry`, `import -window`
+- **Interaction commands are debug-only** — require the dev bridge, compiled out of release builds
 - **Token authenticated bridge** — random 32-char token, localhost-only
 - **`execFile` (array args)** — never `exec` (shell string), prevents command injection
 - **Window ID validated** — must match `/^\d+$/`
@@ -309,7 +349,7 @@ This package ships [Agent Skills](https://agentskills.io) so AI coding agents ca
 
 | Skill | Description |
 |-------|-------------|
-| `tauri-agent-tools` | Using all 14 CLI commands to inspect Tauri apps |
+| `tauri-agent-tools` | Using all 25 CLI commands to inspect and interact with Tauri apps |
 | `tauri-bridge-setup` | Adding the Rust dev bridge to a Tauri project |
 
 <details>
@@ -363,7 +403,7 @@ Full documentation is available at the [docs site](https://cesarandreslopez.gith
 - [Installation](https://cesarandreslopez.github.io/tauri-agent-tools/getting-started/installation/) — system requirements and setup
 - [Quick Start](https://cesarandreslopez.github.io/tauri-agent-tools/getting-started/quick-start/) — get running in 5 minutes
 - [Bridge Setup](https://cesarandreslopez.github.io/tauri-agent-tools/getting-started/bridge-setup/) — integrate the Rust bridge into your Tauri app
-- [Command Reference](https://cesarandreslopez.github.io/tauri-agent-tools/commands/) — all 14 commands with examples
+- [Command Reference](https://cesarandreslopez.github.io/tauri-agent-tools/commands/) — all 25 commands with examples
 - [Platform Support](https://cesarandreslopez.github.io/tauri-agent-tools/platform-support/) — X11, Wayland, macOS details
 - [Architecture](https://cesarandreslopez.github.io/tauri-agent-tools/architecture/overview/) — how it works under the hood
 

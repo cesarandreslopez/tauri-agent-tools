@@ -33,10 +33,13 @@ npm install -g tauri-agent-tools
 Some commands require the Rust dev bridge running inside the Tauri app. Others work standalone.
 
 **Bridge required** (needs running Tauri app with bridge):
-`screenshot --selector`, `dom`, `eval`, `wait --selector`, `wait --eval`, `ipc-monitor`, `console-monitor`, `rust-logs`, `storage`, `page-state`, `mutations`, `snapshot`
+`screenshot --selector`, `dom`, `eval`, `wait --selector`, `wait --eval`, `ipc-monitor`, `console-monitor`, `rust-logs`, `storage`, `page-state`, `mutations`, `snapshot`, `click`, `type`, `scroll`, `focus`, `navigate`, `select`, `invoke`, `capture`, `check`, `store-inspect`
 
 **Standalone** (no bridge needed):
 `screenshot --title` (full window only), `wait --title`, `list-windows`, `info`, `diff`
+
+**Optional bridge:**
+`probe` (works standalone to discover bridges, richer output with bridge)
 
 The bridge auto-discovers via token files in `/tmp/tauri-dev-bridge-*.token`. No manual port/token configuration needed.
 
@@ -133,25 +136,6 @@ tauri-agent-tools mutations ".sidebar" --attributes --duration 5000
 # Search for elements containing text
 tauri-agent-tools dom --text "Settings" --first --json
 ```
-
-## Command Reference
-
-| Command | Key Flags | Bridge? | Description |
-|---------|-----------|---------|-------------|
-| `screenshot` | `--selector <css>`, `--title <regex>`, `-o <path>`, `--max-width <n>` | selector: yes, title: no | Capture window or DOM element screenshot |
-| `dom` | `[selector]`, `--depth <n>`, `--styles`, `--text <pattern>`, `--mode accessibility`, `--json` | yes | Query DOM structure or find elements by text |
-| `eval` | `<js-expression>` | yes | Evaluate JavaScript in webview |
-| `wait` | `--selector <css>`, `--eval <js>`, `--title <regex>`, `--timeout <ms>` | selector/eval: yes | Wait for a condition |
-| `list-windows` | `--tauri`, `--json` | no | List visible windows |
-| `info` | `--title <regex>`, `--json` | no | Window geometry and display info |
-| `ipc-monitor` | `--filter <cmd>`, `--duration <ms>`, `--json` | yes | Monitor Tauri IPC calls |
-| `console-monitor` | `--level <lvl>`, `--filter <regex>`, `--duration <ms>`, `--json` | yes | Monitor console output |
-| `rust-logs` | `--level <lvl>`, `--target <regex>`, `--source <src>`, `--duration <ms>`, `--json` | yes | Monitor Rust logs and sidecar output |
-| `storage` | `--type <local\|session\|cookies\|all>`, `--key <name>`, `--json` | yes | Inspect browser storage |
-| `page-state` | `--json` | yes | URL, title, viewport, scroll, document size |
-| `diff` | `<image1> <image2>`, `-o <path>`, `--threshold <pct>`, `--json` | no | Compare two screenshots with difference metrics |
-| `mutations` | `<selector>`, `--attributes`, `--duration <ms>`, `--json` | yes | Watch DOM mutations on a CSS selector |
-| `snapshot` | `-o <prefix>`, `-s <css>`, `--dom-depth <n>`, `--eval <js>`, `--json` | yes | Capture screenshot + DOM + page state + storage in one shot |
 
 ### Interact with the app
 

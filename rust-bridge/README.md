@@ -82,19 +82,21 @@ tauri-agent-tools eval "document.title"
 1. Bridge starts an HTTP server on a random localhost port
 2. A token file with `{ port, token, pid }` is written to `/tmp/`
 3. `tauri-agent-tools` discovers the token file and authenticates via the token
-4. Requests are `POST /eval { js, token }` (JS evaluation) or `POST /logs { token }` (Rust log retrieval)
-5. For `/eval`, the bridge injects JS into the webview
+4. The bridge exposes four endpoints: `POST /eval` (JS evaluation), `POST /logs` (Rust log retrieval), `POST /describe` (bridge metadata), and `GET /version` (unauthenticated health check)
+5. `/eval` accepts an optional `window` field to target specific webview windows (defaults to `"main"`)
 6. The injected JS evaluates the expression, then calls back into Rust via `window.__TAURI__.core.invoke("__dev_bridge_result", { id, value })` to deliver the result
 7. The HTTP handler thread waits for the result (up to 5 seconds) and returns it as JSON
-8. For `/logs`, the bridge drains its ring buffer of captured `tracing` events and returns them as JSON
-9. The token file is cleaned up when the app exits
+8. `/logs` drains the ring buffer of captured `tracing` events and returns them as JSON
+9. `/describe` returns PID, window labels, and capabilities
+10. The token file is cleaned up when the app exits
 
 ## Security
 
 - **Localhost only** — the bridge binds to `127.0.0.1`
 - **Token authenticated** — every request requires a random 32-char token
 - **Development only** — wrapped in `cfg!(debug_assertions)`, stripped in release builds
-- **Read-only** — `tauri-agent-tools` only reads DOM state, never injects input
+- **Inspection is read-only** — inspection commands only read DOM state
+- **Interaction is debug-only** — interaction commands use eval-based DOM dispatch, sandboxed to the webview
 
 ## Agent-Assisted Setup
 
