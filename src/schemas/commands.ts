@@ -88,9 +88,48 @@ export type StorageType = z.infer<typeof StorageTypeSchema>;
 export const DomModeSchema = z.enum(['dom', 'accessibility']);
 export type DomMode = z.infer<typeof DomModeSchema>;
 
+// === Capture manifest ===
+
+export const CaptureManifestSchema = z.object({
+  timestamp: z.string(),
+  url: z.string().optional(),
+  title: z.string().optional(),
+  viewport: z.object({ width: z.number(), height: z.number() }).optional(),
+  errorCount: z.number().optional(),
+  files: z.record(z.string(), z.string()),
+});
+export type CaptureManifest = z.infer<typeof CaptureManifestSchema>;
+
 // === CLI: package.json ===
 
 export const PackageJsonSchema = z.object({
   version: z.string(),
 }).passthrough();
 export type PackageJson = z.infer<typeof PackageJsonSchema>;
+
+// === Store Inspect ===
+
+export const StoreInspectResultSchema = z.object({
+  framework: z.string(),
+  stores: z.record(z.string(), z.unknown()),
+});
+export type StoreInspectResult = z.infer<typeof StoreInspectResultSchema>;
+
+// === Check ===
+
+export const CheckItemSchema = z.object({
+  type: z.enum(['selector', 'text', 'eval', 'no-errors']),
+  passed: z.boolean(),
+  selector: z.string().optional(),
+  pattern: z.string().optional(),
+  expression: z.string().optional(),
+  errors: z.array(z.string()).optional(),
+  error: z.string().optional(),
+});
+export type CheckItem = z.infer<typeof CheckItemSchema>;
+
+export const CheckResultSchema = z.object({
+  passed: z.boolean(),
+  checks: z.array(CheckItemSchema),
+});
+export type CheckResult = z.infer<typeof CheckResultSchema>;

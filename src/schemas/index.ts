@@ -21,6 +21,10 @@ export {
   type RustLogEntry,
   BridgeEvalResponseSchema,
   BridgeLogsResponseSchema,
+  DescribeResponseSchema,
+  type DescribeResponse,
+  VersionResponseSchema,
+  type VersionResponse,
 } from './bridge.js';
 
 export {
@@ -55,6 +59,14 @@ export {
   type DomMode,
   PackageJsonSchema,
   type PackageJson,
+  CheckItemSchema,
+  type CheckItem,
+  CheckResultSchema,
+  type CheckResult,
+  StoreInspectResultSchema,
+  type StoreInspectResult,
+  CaptureManifestSchema,
+  type CaptureManifest,
 } from './commands.js';
 
 export {
@@ -64,3 +76,18 @@ export {
   SwayNodeSchema,
   type SwayNode,
 } from './platform.js';
+
+export {
+  InteractionResultSchema,
+  type InteractionResult,
+  ClickResultSchema,
+  type ClickResult,
+  TypeResultSchema,
+  type TypeResult,
+  ScrollResultSchema,
+  type ScrollResult,
+  SelectResultSchema,
+  type SelectResult,
+  InvokeResultSchema,
+  type InvokeResult,
+} from './interact.js';

@@ -15,6 +15,8 @@ use tracing_subscriber::util::SubscriberInitExt;
 struct EvalRequest {
     js: String,
     token: String,
+    #[serde(default)]
+    window: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -39,6 +41,32 @@ pub struct LogEntry {
 #[derive(Serialize)]
 struct LogResponse {
     entries: Vec<LogEntry>,
+}
+
+#[derive(Deserialize)]
+struct DescribeRequest {
+    token: String,
+}
+
+#[derive(Serialize, Default)]
+struct DescribeResponse {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    app: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pid: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    windows: Option<Vec<String>>,
+    capabilities: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    surfaces: Option<HashMap<String, String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    exports: Option<HashMap<String, String>>,
+}
+
+#[derive(Serialize)]
+struct VersionResponse {
+    version: String,
+    endpoints: Vec<String>,
 }
 
 #[derive(Serialize)]
@@ -295,7 +323,24 @@ pub fn start_bridge(app: &AppHandle) -> Result<(u16, Arc<LogBuffer>), String> {
             let is_post = request.method().as_str() == "POST";
             let url = request.url().to_string();
 
-            if !is_post || (url != "/eval" && url != "/logs") {
+            // Handle GET /version (no auth needed)
+            if url == "/version" && request.method().as_str() == "GET" {
+                let resp = VersionResponse {
+                    version: "0.6.0".to_string(),
+                    endpoints: vec![
+                        "/eval".to_string(),
+                        "/logs".to_string(),
+                        "/describe".to_string(),
+                        "/version".to_string(),
+                    ],
+                };
+                let json = serde_json::to_string(&resp).unwrap();
+                let header = Header::from_bytes("Content-Type", "application/json").unwrap();
+                let _ = request.respond(Response::from_string(json).with_header(header));
+                continue;
+            }
+
+            if !is_post || (url != "/eval" && url != "/logs" && url != "/describe") {
                 let _ = request.respond(Response::from_string("Not found").with_status_code(404));
                 continue;
             }
@@ -333,6 +378,46 @@ pub fn start_bridge(app: &AppHandle) -> Result<(u16, Arc<LogBuffer>), String> {
                 continue;
             }
 
+            // Handle /describe endpoint
+            if url == "/describe" {
+                let desc_req: DescribeRequest = match serde_json::from_str(&body) {
+                    Ok(r) => r,
+                    Err(_) => {
+                        let _ = request
+                            .respond(Response::from_string("Invalid JSON").with_status_code(400));
+                        continue;
+                    }
+                };
+
+                if desc_req.token != expected_token {
+                    let _ = request
+                        .respond(Response::from_string("Unauthorized").with_status_code(401));
+                    continue;
+                }
+
+                let windows: Vec<String> = app_handle
+                    .webview_windows()
+                    .keys()
+                    .cloned()
+                    .collect();
+
+                let resp = DescribeResponse {
+                    pid: Some(std::process::id()),
+                    windows: Some(windows),
+                    capabilities: vec![
+                        "eval".to_string(),
+                        "logs".to_string(),
+                        "describe".to_string(),
+                    ],
+                    ..Default::default()
+                };
+
+                let json = serde_json::to_string(&resp).unwrap();
+                let header = Header::from_bytes("Content-Type", "application/json").unwrap();
+                let _ = request.respond(Response::from_string(json).with_header(header));
+                continue;
+            }
+
             // Handle /eval endpoint
             let eval_req: EvalRequest = match serde_json::from_str(&body) {
                 Ok(r) => r,
@@ -353,7 +438,8 @@ pub fn start_bridge(app: &AppHandle) -> Result<(u16, Arc<LogBuffer>), String> {
             // Evaluate JS in webview via callback pattern
             let request_id = uuid::Uuid::new_v4().to_string();
 
-            if let Some(window) = app_handle.get_webview_window("main") {
+            let window_label = eval_req.window.as_deref().unwrap_or("main");
+            if let Some(window) = app_handle.get_webview_window(window_label) {
                 // Build JS that evaluates the expression, then calls back into Rust
                 // via __TAURI__.core.invoke() to deliver the result.
                 let callback_js = format!(

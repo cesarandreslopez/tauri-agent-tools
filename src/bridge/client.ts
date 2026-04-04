@@ -4,25 +4,34 @@ import {
   ViewportSizeSchema,
   BridgeEvalResponseSchema,
   BridgeLogsResponseSchema,
+  DescribeResponseSchema,
+  VersionResponseSchema,
 } from '../schemas/bridge.js';
-import type { ElementRect, RustLogEntry } from '../schemas/bridge.js';
+import type { ElementRect, RustLogEntry, DescribeResponse, VersionResponse } from '../schemas/bridge.js';
 import { A11yNodeSchema } from '../schemas/dom.js';
 import type { A11yNode } from '../schemas/dom.js';
 
 export class BridgeClient {
   private baseUrl: string;
   private token: string;
+  private windowLabel: string | undefined;
 
-  constructor(config: BridgeConfig) {
+  constructor(config: BridgeConfig, windowLabel?: string) {
     this.baseUrl = `http://127.0.0.1:${config.port}`;
     this.token = config.token;
+    this.windowLabel = windowLabel;
   }
 
   async eval(js: string, timeout = 5000): Promise<unknown> {
+    const body: Record<string, unknown> = { js, token: this.token };
+    if (this.windowLabel !== undefined) {
+      body.window = this.windowLabel;
+    }
+
     const res = await fetch(`${this.baseUrl}/eval`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ js, token: this.token }),
+      body: JSON.stringify(body),
       signal: AbortSignal.timeout(timeout),
     });
 
@@ -157,6 +166,33 @@ export class BridgeClient {
       return true;
     } catch {
       return false;
+    }
+  }
+
+  async describe(): Promise<DescribeResponse | null> {
+    try {
+      const res = await fetch(`${this.baseUrl}/describe`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: this.token }),
+        signal: AbortSignal.timeout(5000),
+      });
+      if (!res.ok) return null;
+      return DescribeResponseSchema.parse(await res.json());
+    } catch {
+      return null;
+    }
+  }
+
+  async version(): Promise<VersionResponse | null> {
+    try {
+      const res = await fetch(`${this.baseUrl}/version`, {
+        signal: AbortSignal.timeout(5000),
+      });
+      if (!res.ok) return null;
+      return VersionResponseSchema.parse(await res.json());
+    } catch {
+      return null;
     }
   }
 }

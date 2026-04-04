@@ -52,3 +52,21 @@ export const BridgeEvalResponseSchema = z.object({
 export const BridgeLogsResponseSchema = z.object({
   entries: z.array(RustLogEntrySchema),
 });
+
+// === Probe / Discovery Responses ===
+
+export const DescribeResponseSchema = z.object({
+  app: z.string().optional(),
+  pid: z.number().optional(),
+  windows: z.array(z.string()).optional(),
+  capabilities: z.array(z.string()).optional(),
+  surfaces: z.record(z.string(), z.string()).optional(),
+  exports: z.record(z.string(), z.string()).optional(),
+});
+export type DescribeResponse = z.infer<typeof DescribeResponseSchema>;
+
+export const VersionResponseSchema = z.object({
+  version: z.string(),
+  endpoints: z.array(z.string()),
+});
+export type VersionResponse = z.infer<typeof VersionResponseSchema>;
