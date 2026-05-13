@@ -107,8 +107,9 @@ describe('app-paths command', () => {
       expect(out.identifier).toBe('com.bare.app');
       expect(out.productName).toBeNull();
       expect(out.configPath).toBeNull();
+      const darwinHome = process.platform === 'darwin' ? process.env.HOME : '/Users/<user>';
       expect(out.paths.darwin.appLogDir).toBe(
-        `${process.env.HOME ?? '/Users/<user>'}/Library/Logs/com.bare.app`,
+        `${darwinHome}/Library/Logs/com.bare.app`,
       );
     } finally {
       cap.restore();
