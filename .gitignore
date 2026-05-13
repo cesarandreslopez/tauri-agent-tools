@@ -15,3 +15,11 @@ site/
 
 # Contextful
 contextful-tlap/
+
+# Rust build artifacts from the example bridge crate (~600MB after `cargo check`)
+examples/**/target/
+# Tauri build.rs codegen — regenerated every cargo check
+examples/**/gen/
+# Example crates intentionally don't commit lockfiles so integrators who copy
+# the example resolve against their own dependency set rather than ours.
+examples/**/Cargo.lock

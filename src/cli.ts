@@ -35,6 +35,17 @@ import { registerStoreInspect } from './commands/storeInspect.js';
 import { registerCheck } from './commands/check.js';
 import { registerProbe } from './commands/probe.js';
 import { registerCapture } from './commands/capture.js';
+import { registerAppPaths } from './commands/appPaths.js';
+import { registerConfigInspect } from './commands/configInspect.js';
+import { registerOsLogs } from './commands/osLogs.js';
+import { registerSidecarTap } from './commands/sidecarTap.js';
+import { registerSidecarReplay } from './commands/sidecarReplay.js';
+import { registerForensics } from './commands/forensics.js';
+import { registerProcessTree } from './commands/processTree.js';
+import { registerCapabilitiesAudit } from './commands/capabilitiesAudit.js';
+import { registerWebviewAttach } from './commands/webviewAttach.js';
+import { registerHealth } from './commands/health.js';
+import { registerDiagnose } from './commands/diagnose.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const pkg = PackageJsonSchema.parse(JSON.parse(readFileSync(resolve(__dirname, '..', 'package.json'), 'utf-8')));
@@ -90,6 +101,23 @@ registerStoreInspect(program);
 registerCheck(program);
 registerProbe(program);
 registerCapture(program, getAdapter);
+
+// ── Bridge-free diagnostics (Tier 1) ─────────────────────────────────────────
+registerAppPaths(program);
+registerConfigInspect(program);
+registerOsLogs(program);
+registerSidecarTap(program);
+registerSidecarReplay(program);
+registerForensics(program);
+
+// ── Bridge-extending diagnostics (Tier 2 — requires bridge v0.7.0+) ──────────
+registerProcessTree(program);
+registerCapabilitiesAudit(program);
+registerWebviewAttach(program);
+registerHealth(program);
+
+// ── Tier 3: super-command (composes Tier 1 + Tier 2) ─────────────────────────
+registerDiagnose(program);
 
 program.parseAsync().catch((err: unknown) => {
   console.error(err instanceof Error ? err.message : String(err));

@@ -70,3 +70,67 @@ export const VersionResponseSchema = z.object({
   endpoints: z.array(z.string()),
 });
 export type VersionResponse = z.infer<typeof VersionResponseSchema>;
+
+// === /process ===
+
+export const SidecarSummarySchema = z.object({
+  name: z.string(),
+  pid: z.number().int(),
+  exe: z.string().optional(),
+  args: z.array(z.string()),
+  alive: z.boolean().nullable().optional(),
+});
+export type SidecarSummary = z.infer<typeof SidecarSummarySchema>;
+
+export const TauriProcessInfoSchema = z.object({
+  pid: z.number().int(),
+  exe: z.string().optional(),
+  args: z.array(z.string()),
+  uptime_ms: z.number().int(),
+});
+export type TauriProcessInfo = z.infer<typeof TauriProcessInfoSchema>;
+
+export const ProcessResponseSchema = z.object({
+  tauri: TauriProcessInfoSchema,
+  sidecars: z.array(SidecarSummarySchema),
+});
+export type ProcessResponse = z.infer<typeof ProcessResponseSchema>;
+
+// === /capabilities ===
+
+export const LiveCapabilityEntrySchema = z.object({
+  identifier: z.string(),
+  description: z.string().optional(),
+  windows: z.array(z.string()),
+  permissions: z.array(z.string()),
+});
+export type LiveCapabilityEntry = z.infer<typeof LiveCapabilityEntrySchema>;
+
+export const CapabilitiesResponseSchema = z.object({
+  declared: z.array(LiveCapabilityEntrySchema),
+  windows: z.array(z.string()),
+});
+export type CapabilitiesResponse = z.infer<typeof CapabilitiesResponseSchema>;
+
+// === /devtools ===
+
+export const DevtoolsPlatformSchema = z.enum(['wkwebview', 'webview2', 'webkitgtk']);
+export type DevtoolsPlatform = z.infer<typeof DevtoolsPlatformSchema>;
+
+export const DevtoolsResponseSchema = z.object({
+  platform: DevtoolsPlatformSchema,
+  inspectable: z.boolean(),
+  url: z.string().nullable().optional(),
+  hint: z.string(),
+});
+export type DevtoolsResponse = z.infer<typeof DevtoolsResponseSchema>;
+
+// === /health ===
+
+export const HealthResponseSchema = z.object({
+  uptime_ms: z.number().int(),
+  webview_ready: z.boolean(),
+  sidecars_alive: z.boolean(),
+  sidecars: z.array(SidecarSummarySchema),
+});
+export type HealthResponse = z.infer<typeof HealthResponseSchema>;

@@ -1,8 +1,8 @@
 ---
 name: tauri-agent-tools
-description: CLI for inspecting and interacting with Tauri desktop apps — DOM queries, screenshots, interaction (click/type/scroll), IPC monitoring, store inspection, structured assertions
-version: 0.6.0
-tags: [tauri, desktop, debugging, screenshot, dom, inspection, diff, mutations, snapshot, interaction, click, type, scroll, invoke, probe, capture, check, store-inspect]
+description: CLI for inspecting and interacting with Tauri desktop apps — DOM queries, screenshots, interaction (click/type/scroll), IPC monitoring, store inspection, structured assertions, plus bridge-free diagnostics (OS logs, app paths, sidecar NDJSON tap/replay, forensic bundles) and the `diagnose` super-command for one-shot triage
+version: 0.7.0
+tags: [tauri, desktop, debugging, screenshot, dom, inspection, diff, mutations, snapshot, interaction, click, type, scroll, invoke, probe, capture, check, store-inspect, forensics, os-logs, app-paths, sidecar, config-inspect, diagnose]
 ---
 
 # tauri-agent-tools
@@ -33,15 +33,39 @@ npm install -g tauri-agent-tools
 Some commands require the Rust dev bridge running inside the Tauri app. Others work standalone.
 
 **Bridge required** (needs running Tauri app with bridge):
-`screenshot --selector`, `dom`, `eval`, `wait --selector`, `wait --eval`, `ipc-monitor`, `console-monitor`, `rust-logs`, `storage`, `page-state`, `mutations`, `snapshot`, `click`, `type`, `scroll`, `focus`, `navigate`, `select`, `invoke`, `capture`, `check`, `store-inspect`
+`screenshot --selector`, `dom`, `eval`, `wait --selector`, `wait --eval`, `ipc-monitor`, `console-monitor`, `rust-logs`, `storage`, `page-state`, `mutations`, `snapshot`, `click`, `type`, `scroll`, `focus`, `navigate`, `select`, `invoke`, `capture`, `check`, `store-inspect`, `process-tree` *(v0.7+)*, `capabilities audit` *(v0.7+)*, `webview attach` *(v0.7+)*, `health` *(v0.7+)*
 
 **Standalone** (no bridge needed):
-`screenshot --title` (full window only), `wait --title`, `list-windows`, `info`, `diff`
+`screenshot --title` (full window only), `wait --title`, `list-windows`, `info`, `diff`, `app-paths`, `config inspect`, `os-logs`, `sidecar tap`, `sidecar replay`, `forensics`
 
 **Optional bridge:**
 `probe` (works standalone to discover bridges, richer output with bridge)
 
 The bridge auto-discovers via token files in `/tmp/tauri-dev-bridge-*.token`. No manual port/token configuration needed.
+
+## Don't know where to start? `diagnose`
+
+When something's wrong and you're not sure why, run:
+
+```bash
+tauri-agent-tools diagnose --config ./src-tauri -o ./diagnose-out
+```
+
+`diagnose` is a best-effort super-command. It always runs the bridge-free forensics half; if a dev bridge is reachable it also layers `/process`, `/capabilities`, `/devtools`, `/health` data. The master `summary.md` lists "Next steps" pointing at the right deeper command. See the [`tauri-debug-quickstart`](../tauri-debug-quickstart/SKILL.md) skill for a full symptom-to-command decision tree.
+
+## Debugging decision tree (precision form)
+
+When you know what you're looking at, jump straight to:
+
+| Symptom | First command |
+|---------|---------------|
+| Don't know — give me everything | `tauri-agent-tools diagnose -o ./diag` |
+| App is running and bridge is responding | Use the 25 bridge-mediated commands (`screenshot`, `dom`, `eval`, …) |
+| Bridge isn't responding (release build, app crashed, pre-webview boot failure) | `tauri-agent-tools forensics -o ./forensics-out` |
+| You only have the bundle id, no source tree | `tauri-agent-tools app-paths --identifier com.example.app --platform all --exists` |
+| Need a structured snapshot of `tauri.conf.json` + capabilities | `tauri-agent-tools config inspect --json` |
+| Suspicion: a sidecar process is emitting malformed/unexpected NDJSON | Run the sidecar under `tauri-agent-tools sidecar tap --schema <path> -- <cmd>` instead of under Tauri |
+| OS-level error visible in Console.app/journalctl but not in app logs | `tauri-agent-tools os-logs --identifier com.example.app --level error --duration 30000` |
 
 ## Core Workflows
 
@@ -118,6 +142,60 @@ tauri-agent-tools rust-logs --source sidecar --duration 10000 --json
 
 # Specific sidecar
 tauri-agent-tools rust-logs --source sidecar:ffmpeg --duration 5000 --json
+```
+
+### Bridge-extended diagnostics (process tree, capabilities, devtools, health — requires bridge v0.7.0+)
+
+Four commands that talk to new endpoints on the dev bridge. Each calls `GET /version` first to feature-detect and emits a clear "requires bridge v0.7.0+ — re-copy dev_bridge.rs" error against older bridges.
+
+```bash
+# Tauri PID + registered sidecars (uses /process)
+tauri-agent-tools process-tree --json
+
+# Devtron-style live capability audit (uses /capabilities)
+tauri-agent-tools capabilities audit --json
+# findings[] flag wildcard "*", over-broad shell:/fs:/http: scopes,
+# capabilities that reference window labels not actually registered, etc.
+
+# Inspector URL or platform hint (uses /devtools)
+tauri-agent-tools webview attach              # human-readable with hint
+tauri-agent-tools webview attach --print-url  # URL alone (empty if none)
+tauri-agent-tools webview attach --open       # launch in default browser
+
+# "Is this app sick" check (uses /health). Exits non-zero on unhealthy.
+tauri-agent-tools health --json
+```
+
+Sidecars only appear in `process-tree` / `health` if integrators register them — either by passing `Some(&registry)` to `dev_bridge::spawn_sidecar_monitored`, or by calling `dev_bridge::register_sidecar` after their own spawn.
+
+### Bridge-free diagnostics (post-mortem & sidecar workflows)
+
+These six commands need no live bridge — useful for release builds, dead apps, and sidecar processes.
+
+```bash
+# Resolve the app's OS data/log/cache/config dirs from tauri.conf.json
+tauri-agent-tools app-paths --config ./src-tauri --json
+# All three platforms (handy for cross-OS forensics)
+tauri-agent-tools app-paths --config ./src-tauri --platform all --exists
+
+# Structured snapshot of the app config + capability/permission audit
+tauri-agent-tools config inspect --config ./src-tauri --json
+# warnings[] flags wildcard "*" perms, fs:allow-all, capabilities referencing
+# plugins not declared in Cargo.toml, sidecars declared without tauri-plugin-shell.
+
+# OS-level log tail, filtered to a Tauri bundle id (NDJSON one-per-line)
+tauri-agent-tools os-logs --identifier com.example.app --duration 5000
+tauri-agent-tools os-logs --level error --source main --duration 30000
+
+# Run a sidecar under a tap to see its stdio + validate against a JSON Schema
+tauri-agent-tools sidecar tap --schema ./schema.json --record /tmp/run.ndjson -- node my-sidecar.js
+# Replay deterministically
+tauri-agent-tools sidecar replay /tmp/run.ndjson --to-exec node my-sidecar.js --rate 100
+
+# One-shot forensic bundle for post-crash analysis. Works on a DEAD app.
+tauri-agent-tools forensics --config ./src-tauri -o ./forensics-out
+# → ./forensics-out/{summary.md,summary.json,project.json,app-log-tail.txt,live-os-log.ndjson}
+# summary.md includes detected panic markers + suggested next commands.
 ```
 
 ### Watch DOM mutations

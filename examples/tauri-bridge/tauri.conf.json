@@ -1,0 +1,25 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "tauri-dev-bridge-example",
+  "version": "0.1.0",
+  "identifier": "com.tauri-agent-tools.bridge-example",
+  "build": {
+    "frontendDist": "../frontend-stub"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Bridge Example",
+        "width": 800,
+        "height": 600
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": false
+  }
+}

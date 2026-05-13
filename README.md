@@ -4,7 +4,7 @@
 
 **Agent-driven inspection toolkit for Tauri desktop apps**
 
-25 commands to screenshot, inspect, interact with, and monitor Tauri apps from the CLI.
+36 commands to screenshot, inspect, interact with, monitor, post-mortem, audit, and diagnose Tauri apps from the CLI.
 
 [![CI](https://github.com/cesarandreslopez/tauri-agent-tools/actions/workflows/ci.yml/badge.svg)](https://github.com/cesarandreslopez/tauri-agent-tools/actions/workflows/ci.yml)
 [![npm version](https://img.shields.io/npm/v/tauri-agent-tools.svg)](https://www.npmjs.com/package/tauri-agent-tools)
@@ -283,6 +283,74 @@ All bridge-dependent commands support:
 | `--port <n>` / `--token <s>` | Explicit bridge config (skips auto-discovery) |
 | `--pid <n>` | Target a specific app by PID |
 | `--window-label <label>` | Target a specific webview window (default: main) |
+
+## Don't know where to start? `diagnose`
+
+When something's wrong and you're not sure why, run this first:
+
+```bash
+tauri-agent-tools diagnose --config ./src-tauri -o ./diagnose-out
+# → ./diagnose-out/summary.md   (master report with "Next steps")
+# → ./diagnose-out/forensics/   (Tier 1 bundle: log tail, panics, paths)
+# → ./diagnose-out/bridge.json  (Tier 2 bridge data when reachable)
+```
+
+`diagnose` is a best-effort super-command. It works on dead apps. It layers bridge data on top when a dev bridge is reachable, degrades cleanly when not, and the master `summary.md` includes a "Next steps" section pointing at the right deeper command. Pass `--no-bridge` to skip the bridge phase entirely.
+
+See [`docs/troubleshooting/decision-tree.md`](docs/troubleshooting/decision-tree.md) for the full symptom → command flowchart.
+
+## Bridge-extending diagnostics (new in 0.7, requires bridge v0.7.0+)
+
+Four commands that talk to new dev-bridge endpoints. Each feature-detects via `GET /version` and surfaces an actionable upgrade error when the bridge is older than v0.7.0.
+
+```bash
+# Tauri PID + registered sidecars
+tauri-agent-tools process-tree --json
+
+# Live capability audit (vs. config inspect which reads JSON files)
+tauri-agent-tools capabilities audit --json
+
+# Webview inspector URL or platform hint
+tauri-agent-tools webview attach --print-url
+tauri-agent-tools webview attach --open
+
+# Quick "is this app sick" check — exits non-zero when unhealthy (CI-friendly)
+tauri-agent-tools health --json
+```
+
+> **Integrators upgrading from v0.6:** Re-copy `examples/tauri-bridge/src/dev_bridge.rs` into your app. `start_bridge` now returns a third tuple element (`SidecarRegistry`); pass it to `spawn_sidecar_monitored` so sidecars show up in `process-tree`/`health`. See `.agents/skills/tauri-bridge-setup/SKILL.md` for the full upgrade walkthrough.
+
+## Bridge-free diagnostics (new in 0.7)
+
+Six commands that work **without** the dev bridge — for release builds, dead apps, and sidecar processes that the bridge can't reach.
+
+```bash
+# Resolve Tauri 2's OS data/log/cache/config dirs from tauri.conf.json
+tauri-agent-tools app-paths --config ./src-tauri --json
+tauri-agent-tools app-paths --identifier com.example.app --platform all --exists
+
+# Structured "tauri info --json" + capability/permission audit
+tauri-agent-tools config inspect --config ./src-tauri --json
+# Warnings: wildcard permissions, fs:allow-all, capability/Cargo.toml plugin mismatches
+
+# Tail OS logs filtered to a Tauri bundle id (NDJSON envelopes)
+tauri-agent-tools os-logs --identifier com.example.app --duration 5000
+tauri-agent-tools os-logs --level error --source main --duration 30000
+
+# Wrap a sidecar, frame its stdout as NDJSON, validate against a JSON Schema
+tauri-agent-tools sidecar tap --schema ./schema.json --record /tmp/run.ndjson -- node my-sidecar.js
+# Replay the recording deterministically — to stdout or into a fresh sidecar's stdin
+tauri-agent-tools sidecar replay /tmp/run.ndjson --to-exec node my-sidecar.js --rate 100
+
+# Forensic bundle for post-crash analysis (composes the above; works on dead apps)
+tauri-agent-tools forensics --config ./src-tauri -o ./forensics-out
+# → ./forensics-out/{summary.md,summary.json,project.json,app-log-tail.txt,live-os-log.ndjson}
+```
+
+When to reach for them:
+- **The bridge isn't responding** → start with `forensics`.
+- **A sidecar is the suspect** → run it under `sidecar tap` instead of under Tauri.
+- **You don't have source on hand, just a bundle id** → `app-paths --identifier com.example.app`.
 
 ## How It Works
 
