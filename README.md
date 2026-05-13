@@ -417,7 +417,7 @@ This package ships [Agent Skills](https://agentskills.io) so AI coding agents ca
 
 | Skill | Description |
 |-------|-------------|
-| `tauri-agent-tools` | Using all 25 CLI commands to inspect and interact with Tauri apps |
+| `tauri-agent-tools` | Using all 36 CLI commands to inspect and interact with Tauri apps |
 | `tauri-bridge-setup` | Adding the Rust dev bridge to a Tauri project |
 
 <details>
@@ -471,7 +471,7 @@ Full documentation is available at the [docs site](https://cesarandreslopez.gith
 - [Installation](https://cesarandreslopez.github.io/tauri-agent-tools/getting-started/installation/) — system requirements and setup
 - [Quick Start](https://cesarandreslopez.github.io/tauri-agent-tools/getting-started/quick-start/) — get running in 5 minutes
 - [Bridge Setup](https://cesarandreslopez.github.io/tauri-agent-tools/getting-started/bridge-setup/) — integrate the Rust bridge into your Tauri app
-- [Command Reference](https://cesarandreslopez.github.io/tauri-agent-tools/commands/) — all 25 commands with examples
+- [Command Reference](https://cesarandreslopez.github.io/tauri-agent-tools/commands/) — all 36 commands with examples
 - [Platform Support](https://cesarandreslopez.github.io/tauri-agent-tools/platform-support/) — X11, Wayland, macOS details
 - [Architecture](https://cesarandreslopez.github.io/tauri-agent-tools/architecture/overview/) — how it works under the hood
 

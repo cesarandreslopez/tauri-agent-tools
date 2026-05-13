@@ -24,10 +24,10 @@ npx vitest run tests/commands/screenshot.test.ts
 
 | Location | Purpose |
 |----------|---------|
-| `src/cli.ts` | Entry point — registers all 25 commands via `commander` |
+| `src/cli.ts` | Entry point — registers all 36 commands via `commander` |
 | `src/schemas/` | Zod schemas split by domain: `bridge.ts`, `dom.ts`, `commands.ts`, `platform.ts`, `interact.ts` |
 | `src/types.ts` | Pure interfaces: `WindowInfo`, `PlatformAdapter`, `DisplayServer`, `WindowListEntry` |
-| `src/commands/` | One file per command (`screenshot.ts`, `dom.ts`, `eval.ts`, `wait.ts`, `info.ts`, `listWindows.ts`, `ipcMonitor.ts`, `consoleMonitor.ts`, `rustLogs.ts`, `storage.ts`, `pageState.ts`, `diff.ts`, `mutations.ts`, `snapshot.ts`, `check.ts`, `capture.ts`, `probe.ts`, `invoke.ts`, `storeInspect.ts`) |
+| `src/commands/` | One file per command (`screenshot.ts`, `dom.ts`, `eval.ts`, `wait.ts`, `info.ts`, `listWindows.ts`, `ipcMonitor.ts`, `consoleMonitor.ts`, `rustLogs.ts`, `storage.ts`, `pageState.ts`, `diff.ts`, `mutations.ts`, `snapshot.ts`, `check.ts`, `capture.ts`, `probe.ts`, `invoke.ts`, `storeInspect.ts`, plus v0.7 additions: `appPaths.ts`, `configInspect.ts`, `osLogs.ts`, `sidecarTap.ts`, `sidecarReplay.ts`, `forensics.ts`, `processTree.ts`, `capabilitiesAudit.ts`, `webviewAttach.ts`, `health.ts`, `diagnose.ts`) |
 | `src/commands/interact/` | Interaction commands: `click.ts`, `type.ts`, `scroll.ts`, `focus.ts`, `navigate.ts`, `select.ts`, `shared.ts` |
 | `src/commands/shared.ts` | `addBridgeOptions()` and `resolveBridge()` — shared bridge option wiring |
 | `src/platform/detect.ts` | `detectDisplayServer()` and `ensureTools()` — runtime platform detection |
@@ -46,7 +46,7 @@ npx vitest run tests/commands/screenshot.test.ts
 
 **Module system:** ESM (`"type": "module"`) with NodeNext resolution. All imports must use `.js` extensions (pointing to compiled output).
 
-**Entry point:** `src/cli.ts` registers 25 commands via `commander`. Each command is in `src/commands/` or `src/commands/interact/`.
+**Entry point:** `src/cli.ts` registers 36 commands via `commander`. Each command is in `src/commands/` or `src/commands/interact/`.
 
 **Command registration pattern:** Each command file exports a `registerXxx(program, ...)` function. Commands that need the platform adapter receive `getAdapter` as a parameter. Commands that need the bridge use `resolveBridge()` from `shared.ts`, which handles auto-discovery or explicit `--port`/`--token`.
 

@@ -200,8 +200,8 @@ No authentication required.
 
 ```json
 {
-  "version": "0.6.0",
-  "endpoints": ["/eval", "/logs", "/describe", "/version"]
+  "version": "0.7.0",
+  "endpoints": ["/eval", "/logs", "/describe", "/version", "/process", "/capabilities", "/devtools", "/health"]
 }
 ```
 

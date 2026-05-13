@@ -1,6 +1,6 @@
 # Command Reference
 
-tauri-agent-tools provides 25 commands for inspecting, interacting with, and monitoring Tauri applications. Inspection commands are read-only. Interaction commands are debug-only (require the dev bridge).
+tauri-agent-tools provides 36 commands for inspecting, interacting with, monitoring, post-mortem analysis, and diagnosing Tauri applications. Inspection commands are read-only. Interaction commands are debug-only (require the dev bridge). Bridge-free diagnostics work on dead apps and release builds.
 
 ## Command Summary
 
@@ -31,6 +31,17 @@ tauri-agent-tools provides 25 commands for inspecting, interacting with, and mon
 | `capture` | Yes | Full debug evidence bundle |
 | `check` | Yes | Structured assertions (exit 0/1) |
 | `store-inspect` | Yes | Inspect reactive store state |
+| `app-paths` | No | Resolve Tauri 2 OS data/log/cache/config dirs |
+| `config inspect` | No | Snapshot `tauri.conf.json` + capability audit |
+| `os-logs` | No | Tail host OS logs filtered to a bundle id |
+| `sidecar tap` | No | Wrap a sidecar, frame stdout as NDJSON, validate |
+| `sidecar replay` | No | Replay a recorded NDJSON stream |
+| `forensics` | No | Post-crash bundle (works on dead apps) |
+| `process-tree` | Yes (v0.7+) | Tauri PID + registered sidecars with liveness |
+| `capabilities audit` | Yes (v0.7+) | Live capability audit (wildcards, over-broad scopes) |
+| `webview attach` | Yes (v0.7+) | Webview inspector URL or platform hint |
+| `health` | Yes (v0.7+) | Quick "is this app sick" check (CI-friendly) |
+| `diagnose` | Optional | Best-effort super-command (forensics + bridge data) |
 
 ## Categories
 
@@ -79,6 +90,30 @@ tauri-agent-tools provides 25 commands for inspecting, interacting with, and mon
 - **probe** — discover running bridges, check health, list window labels
 - **capture** — collect screenshot + DOM + page state + storage + console errors + Rust logs into a bundle
 - **check** — run structured assertions against DOM state (selector exists, text matches, no console errors)
+
+### Bridge-free diagnostics (new in 0.7)
+
+Work without the dev bridge — for release builds, dead apps, and sidecar processes.
+
+- **app-paths** — resolve a Tauri 2 app's OS data/log/cache/config directories from `tauri.conf.json`
+- **config inspect** — emit a structured snapshot of `tauri.conf.json` plus a capability/permission audit
+- **os-logs** — tail the host OS log stream filtered to a Tauri bundle id (NDJSON envelopes)
+- **sidecar tap** — wrap-and-run a sidecar binary, frame its stdout as NDJSON, validate against an optional JSON Schema
+- **sidecar replay** — replay a recorded NDJSON stream to stdout or into a fresh process
+- **forensics** — one-shot bundle for post-crash analysis (composes the above; works on dead apps)
+
+### Bridge-extending diagnostics (new in 0.7, requires bridge v0.7.0+)
+
+Talk to new dev-bridge endpoints. Each feature-detects via `GET /version` and surfaces a clear upgrade error against older bridges.
+
+- **process-tree** — Tauri PID + registered sidecars rendered as a tree
+- **capabilities audit** — live audit of declared Tauri capabilities, flags wildcard and over-broad scopes
+- **webview attach** — webview inspector URL or platform hint (`webview2`, `webkitgtk`, `wkwebview`)
+- **health** — uptime + webview readiness + per-sidecar liveness; exits non-zero when unhealthy
+
+### Super-command
+
+- **diagnose** — best-effort. Composes `forensics` with live bridge data when reachable; degrades cleanly when not. Master `summary.md` includes a "Next steps" section pointing at the right deeper command.
 
 ## Common Patterns
 
