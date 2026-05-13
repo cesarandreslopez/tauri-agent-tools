@@ -6,15 +6,44 @@ import {
   BridgeLogsResponseSchema,
   DescribeResponseSchema,
   VersionResponseSchema,
+  ProcessResponseSchema,
+  CapabilitiesResponseSchema,
+  DevtoolsResponseSchema,
+  HealthResponseSchema,
 } from '../schemas/bridge.js';
-import type { ElementRect, RustLogEntry, DescribeResponse, VersionResponse } from '../schemas/bridge.js';
+import type {
+  ElementRect,
+  RustLogEntry,
+  DescribeResponse,
+  VersionResponse,
+  ProcessResponse,
+  CapabilitiesResponse,
+  DevtoolsResponse,
+  HealthResponse,
+} from '../schemas/bridge.js';
 import { A11yNodeSchema } from '../schemas/dom.js';
 import type { A11yNode } from '../schemas/dom.js';
+
+/**
+ * Minimum bridge version supplying a given endpoint. Used by `requireEndpoint`
+ * to translate a missing-endpoint condition into an actionable error instead
+ * of an opaque 404.
+ */
+const ENDPOINT_MIN_VERSION: Record<string, string> = {
+  '/process': '0.7.0',
+  '/capabilities': '0.7.0',
+  '/devtools': '0.7.0',
+  '/health': '0.7.0',
+};
 
 export class BridgeClient {
   private baseUrl: string;
   private token: string;
   private windowLabel: string | undefined;
+  /** Cached `/version` response. Populated by `requireEndpoint` on first call. */
+  private versionCache: VersionResponse | null = null;
+  /** Set when `/version` is unreachable so we don't retry it for every call. */
+  private versionUnreachable = false;
 
   constructor(config: BridgeConfig, windowLabel?: string) {
     this.baseUrl = `http://127.0.0.1:${config.port}`;
@@ -194,5 +223,83 @@ export class BridgeClient {
     } catch {
       return null;
     }
+  }
+
+  /**
+   * Verify the bridge exposes the requested endpoint. Caches the `/version`
+   * response so a CLI command that hits the bridge multiple times only pays
+   * one roundtrip for feature detection. Throws an actionable error when the
+   * bridge is too old, with a hint pointing integrators at the example.
+   */
+  async requireEndpoint(path: string): Promise<void> {
+    if (this.versionUnreachable) {
+      throw new Error(
+        `Bridge at ${this.baseUrl} did not respond to /version. The bridge may be ` +
+          `too old (pre-0.6.0) or not running. Confirm the dev server is up and try again.`,
+      );
+    }
+    if (this.versionCache === null) {
+      const v = await this.version();
+      if (v === null) {
+        this.versionUnreachable = true;
+        throw new Error(
+          `Bridge at ${this.baseUrl} did not respond to /version. The bridge may be ` +
+            `too old (pre-0.6.0) or not running. Confirm the dev server is up and try again.`,
+        );
+      }
+      this.versionCache = v;
+    }
+    if (this.versionCache.endpoints.includes(path)) return;
+
+    const minVersion = ENDPOINT_MIN_VERSION[path];
+    const versionHint = minVersion
+      ? `requires bridge v${minVersion}+ (this app reports v${this.versionCache.version})`
+      : `is not supported by the running bridge (v${this.versionCache.version})`;
+    throw new Error(
+      `${path} ${versionHint}. ` +
+        `Re-copy examples/tauri-bridge/src/dev_bridge.rs into your app and rebuild — ` +
+        `see rust-bridge/README.md.`,
+    );
+  }
+
+  async process(): Promise<ProcessResponse> {
+    await this.requireEndpoint('/process');
+    const res = await this.postAuthed('/process');
+    return ProcessResponseSchema.parse(await res.json());
+  }
+
+  async capabilities(): Promise<CapabilitiesResponse> {
+    await this.requireEndpoint('/capabilities');
+    const res = await this.postAuthed('/capabilities');
+    return CapabilitiesResponseSchema.parse(await res.json());
+  }
+
+  async devtools(): Promise<DevtoolsResponse> {
+    await this.requireEndpoint('/devtools');
+    const res = await this.postAuthed('/devtools');
+    return DevtoolsResponseSchema.parse(await res.json());
+  }
+
+  async health(): Promise<HealthResponse> {
+    await this.requireEndpoint('/health');
+    const res = await this.postAuthed('/health');
+    return HealthResponseSchema.parse(await res.json());
+  }
+
+  private async postAuthed(path: string, timeout = 5000): Promise<Response> {
+    const res = await fetch(`${this.baseUrl}${path}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: this.token }),
+      signal: AbortSignal.timeout(timeout),
+    });
+    if (!res.ok) {
+      if (res.status === 401 || res.status === 403) {
+        throw new Error('Bridge authentication failed — check your token');
+      }
+      const text = await res.text().catch(() => '');
+      throw new Error(`Bridge error (${res.status}) on ${path}: ${text}`);
+    }
+    return res;
   }
 }

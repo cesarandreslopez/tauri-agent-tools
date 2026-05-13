@@ -69,6 +69,8 @@ nav:
     - diff: commands/diff.md
     - mutations: commands/mutations.md
     - snapshot: commands/snapshot.md
+  - Troubleshooting:
+    - Decision tree: troubleshooting/decision-tree.md
   - Platform Support: platform-support.md
   - Architecture:
     - Overview: architecture/overview.md

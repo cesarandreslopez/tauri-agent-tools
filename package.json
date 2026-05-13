@@ -1,6 +1,6 @@
 {
   "name": "tauri-agent-tools",
-  "version": "0.6.0",
+  "version": "0.7.0-dev",
   "description": "Agent-driven inspection toolkit for Tauri desktop apps",
   "type": "module",
   "bin": {
@@ -44,6 +44,8 @@
     "access": "public"
   },
   "dependencies": {
+    "ajv": "^8.20.0",
+    "ajv-formats": "^3.0.1",
     "commander": "^14.0.0",
     "zod": "^3.25.76"
   },

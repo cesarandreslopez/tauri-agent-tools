@@ -5,6 +5,64 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - 0.7.0
+
+### Added — Agent UX (Tier 3)
+
+- **`diagnose`** — best-effort super-command. Composes `forensics` (Tier 1) with live bridge data (Tier 2) into one bundle. Always runs the forensics half; layers `/process`, `/capabilities`, `/devtools`, `/health` on top when a bridge is reachable. Each bridge endpoint is best-effort with per-endpoint error recording — partial bridge availability still produces a useful bundle. Output: `<out-dir>/{summary.md, summary.json, bridge.json, forensics/...}`. Use `--no-bridge` to skip the bridge phase entirely.
+- **New agent skill: `tauri-debug-quickstart`** — first-30-seconds triage skill (`.agents/skills/tauri-debug-quickstart/SKILL.md`). Symptom → command table, decision flowchart, and an explicit "when this skill is wrong" section calling out Tauri 1, Windows, and release-build caveats.
+- **MkDocs troubleshooting page** — `docs/troubleshooting/decision-tree.md` with a mermaid flowchart mirroring the skill's symptom-table for human readers. Wired into `mkdocs.yml` nav.
+
+### Added — Bridge-extending diagnostics (Tier 2)
+
+Four CLI commands that talk to new dev-bridge endpoints. Each calls `GET /version` first to feature-detect; against a pre-v0.7 bridge they emit `"requires bridge v0.7.0+ — re-copy examples/tauri-bridge/src/dev_bridge.rs"` instead of an opaque 404.
+
+- **`process-tree`** — Tauri PID + registered sidecars rendered as a tree with `alive`/`DEAD` annotations.
+- **`capabilities audit`** — Devtron-style live audit of declared Tauri capabilities, surfacing wildcard `"*"`, over-broad `fs:allow-all`/`shell:allow-*`/`http:allow-all`, and window labels referenced but not registered.
+- **`webview attach`** — print the webview inspector URL (`webview2` / `webkitgtk`) or platform hint (`wkwebview` — Safari activation). `--print-url` for scripting, `--open` to launch the default browser.
+- **`health`** — uptime + webview readiness + per-sidecar liveness. Exits non-zero when the app is unhealthy so this can drive CI gates.
+
+### Changed — Rust dev bridge (BREAKING for integrators)
+
+- `BRIDGE_VERSION` bumped from `"0.6.0"` to `"0.7.0"`.
+- Four new endpoints: `/process`, `/capabilities`, `/devtools`, `/health` (all POST + token auth).
+- `start_bridge` now returns `(u16, Arc<LogBuffer>, Arc<SidecarRegistry>)` instead of `(u16, Arc<LogBuffer>)`. Integrators destructure the third element to register sidecars.
+- `spawn_sidecar_monitored` now takes an optional `Option<&Arc<SidecarRegistry>>` so spawned sidecars appear in `process-tree`/`health`. Pass `None` to opt out.
+- New `register_sidecar()` for users who spawn children manually.
+- Added `libc = "0.2"` Cargo dep (Unix only) for the cheap `kill(pid, 0)` liveness probe.
+
+**Integrators must re-copy `examples/tauri-bridge/src/dev_bridge.rs`** and adjust `main.rs` to destructure the new return shape. The CLI's new commands fail loudly with a "re-copy" error against older bridges, so partial upgrades are obvious.
+
+### Internal
+
+- `src/bridge/client.ts` — new `requireEndpoint()` helper caches `/version` per `BridgeClient` instance, translating missing endpoints into actionable upgrade errors.
+- `src/schemas/bridge.ts` — added `ProcessResponseSchema`, `CapabilitiesResponseSchema`, `DevtoolsResponseSchema`, `HealthResponseSchema`.
+- `examples/tauri-bridge/` — added minimal `tauri.conf.json`, `build.rs`, placeholder icon, and a `frontend-stub/index.html` so the example crate actually compiles for the first time (it never did).
+- Test count: 696 → 710 (added 7 BridgeClient v0.7 tests + 7 command e2e tests).
+
+### Added — Bridge-free diagnostics (Tier 1 of "expand beyond the bridge")
+
+The toolkit can now diagnose Tauri apps without needing a live debug bridge — covering release builds, dead processes, and sidecar protocols.
+
+- **`app-paths`** — resolve a Tauri 2 app's OS data/log/cache/config directories from `tauri.conf.json` (or a bare `--identifier`). Encodes Tauri 2's `PathResolver` semantics for all three platforms; `--exists` flag annotates which paths are present on disk.
+- **`config inspect`** — emit a structured snapshot of `tauri.conf.json` plus a Devtron-style capability matrix. Cross-checks capability permissions against `Cargo.toml`'s plugin declarations and flags wildcard / over-broad scopes (`*`, `fs:allow-all`, `shell:allow-spawn`, …).
+- **`os-logs`** — tail the host OS's log stream filtered to a Tauri bundle id. macOS uses `log stream` with a `subsystem == "<id>"` predicate; Linux uses `journalctl --user -t <productName>`. Output is one normalized NDJSON envelope per line (`{ ts, level, source, subsystem, message, raw }`). Windows is stubbed for v0.7.
+- **`sidecar tap`** / **`sidecar replay`** — wrap-and-run a sidecar binary, frame its stdout as NDJSON, validate each envelope against an optional JSON Schema (`--schema <path>`, powered by Ajv), and record the raw stream to a file with `--record`. `sidecar replay` reads the recording back to stdout or pipes it into a fresh process via `--to-exec`, optionally rate-limited with `--rate <lps>`.
+- **`forensics`** — one-shot bundle for post-crash analysis. Resolves the project, lists files in `appDataDir`/`appLogDir`, tails the most-recent log for panic markers, pulls macOS `DiagnosticReports` filtered by `productName`, captures a brief live OS-log tail, and writes `summary.md` + `summary.json` + supporting artifacts. Zero bridge calls — works on a dead app.
+
+### Internal
+
+- `src/util/tauriConfig.ts` — `tauri.conf.json` loader (JSONC-tolerant), identifier resolver for v1+v2 layouts, capability discovery, `resolveTauriPaths` matching the `dirs` crate semantics for all three platforms.
+- `src/util/ndjson.ts` — `LineFramer` (CRLF/LF, chunked input, blank-line preservation) and `NdjsonValidator` (Ajv wrapper that distinguishes parse errors from schema mismatches).
+- `src/platform/oslog/{darwin,linux,windows}.ts` — per-platform OS log adapter pattern, mirrors the existing `src/platform/{x11,wayland,...}.ts` shape.
+- Per-domain schemas: `src/schemas/{tauriConfig,osLog,sidecar}.ts`.
+- New dependencies: `ajv` ^8, `ajv-formats` ^3 — loaded via `createRequire` to dodge ESM/CJS interop friction.
+- Command count: 25 → 31. Test count: 623 → 696.
+
+### Notes for skill / docs consumers
+
+- The agent skill (`.agents/skills/tauri-agent-tools`) now distinguishes bridge-required vs bridge-free commands, and adds a debugging decision tree: bridge is healthy → existing 25 commands; bridge isn't responding → start with `forensics`; sidecar is the suspect → `sidecar tap`.
+
 ## [0.6.0] - 2026-04-04
 
 ### Added

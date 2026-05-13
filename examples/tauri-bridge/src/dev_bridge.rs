@@ -2,14 +2,19 @@ use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
 use std::fs;
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader};
 use std::process::{Command, Stdio};
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
+use std::time::Instant;
 use tauri::{AppHandle, Manager};
 use tiny_http::{Header, Response, Server};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
+
+/// Bridge protocol version exposed via `GET /version`. Bumped whenever the
+/// HTTP surface changes shape so CLI clients can feature-detect.
+pub const BRIDGE_VERSION: &str = "0.7.0";
 
 #[derive(Deserialize)]
 struct EvalRequest {
@@ -69,11 +74,162 @@ struct VersionResponse {
     endpoints: Vec<String>,
 }
 
+#[derive(Deserialize)]
+struct AuthedRequest {
+    token: String,
+}
+
+#[derive(Serialize, Clone)]
+struct SidecarSummary {
+    name: String,
+    pid: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    exe: Option<String>,
+    args: Vec<String>,
+    alive: Option<bool>,
+}
+
+#[derive(Serialize)]
+struct ProcessResponse {
+    tauri: TauriProcessInfo,
+    sidecars: Vec<SidecarSummary>,
+}
+
+#[derive(Serialize)]
+struct TauriProcessInfo {
+    pid: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    exe: Option<String>,
+    args: Vec<String>,
+    uptime_ms: u64,
+}
+
+#[derive(Serialize, Clone)]
+struct CapabilityEntry {
+    identifier: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    description: Option<String>,
+    windows: Vec<String>,
+    permissions: Vec<String>,
+}
+
+#[derive(Serialize)]
+struct CapabilitiesResponse {
+    /// Capabilities as declared in tauri.conf.json (best-effort: tauri 2 stores
+    /// these as either bare strings or inline objects; we surface both shapes).
+    declared: Vec<CapabilityEntry>,
+    /// Window labels currently registered with Tauri.
+    windows: Vec<String>,
+}
+
+#[derive(Serialize)]
+struct DevtoolsResponse {
+    platform: String,
+    inspectable: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    url: Option<String>,
+    hint: String,
+}
+
+#[derive(Serialize)]
+struct HealthResponse {
+    uptime_ms: u64,
+    webview_ready: bool,
+    sidecars_alive: bool,
+    sidecars: Vec<SidecarSummary>,
+}
+
 #[derive(Serialize)]
 struct TokenFile {
     port: u16,
     token: String,
     pid: u32,
+}
+
+/// Per-process sidecar metadata captured at spawn time. Used by `/process`
+/// and `/health` so an external diagnostic tool can see the process tree
+/// without scraping `ps`.
+struct SidecarRecord {
+    name: String,
+    pid: u32,
+    exe: Option<String>,
+    args: Vec<String>,
+}
+
+/// Thread-safe registry of sidecars known to this bridge. Populated by
+/// `spawn_sidecar_monitored` automatically; users with their own spawn flow
+/// can call `register_sidecar` after spawning. Aliveness is computed at
+/// request time via a cheap signal-0 check.
+pub struct SidecarRegistry {
+    records: Mutex<Vec<SidecarRecord>>,
+}
+
+impl SidecarRegistry {
+    pub fn new() -> Self {
+        Self {
+            records: Mutex::new(Vec::new()),
+        }
+    }
+
+    fn add(&self, record: SidecarRecord) {
+        let mut recs = self.records.lock().unwrap();
+        recs.push(record);
+    }
+
+    fn snapshot(&self) -> Vec<SidecarSummary> {
+        let recs = self.records.lock().unwrap();
+        recs.iter()
+            .map(|r| SidecarSummary {
+                name: r.name.clone(),
+                pid: r.pid,
+                exe: r.exe.clone(),
+                args: r.args.clone(),
+                alive: pid_alive(r.pid),
+            })
+            .collect()
+    }
+}
+
+impl Default for SidecarRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Best-effort liveness probe for a sidecar PID. Returns `Some(true)` if the
+/// process is running, `Some(false)` if it has exited, and `None` when we
+/// can't determine (e.g., on Windows where we don't ship a probe in v1).
+#[cfg(unix)]
+fn pid_alive(pid: u32) -> Option<bool> {
+    // SAFETY: libc::kill with signal 0 just checks process existence and never
+    // delivers a signal. Returns 0 on success, -1 on error (e.g., ESRCH).
+    let rc = unsafe { libc::kill(pid as libc::pid_t, 0) };
+    Some(rc == 0)
+}
+
+#[cfg(not(unix))]
+fn pid_alive(_pid: u32) -> Option<bool> {
+    None
+}
+
+/// Register a sidecar process with the bridge so it shows up in `/process`
+/// and `/health` responses. Callers that use `spawn_sidecar_monitored` get
+/// this for free; callers who spawn their own children can register them
+/// here. Idempotent in the sense that re-registering a name is allowed
+/// (both entries will be reported).
+pub fn register_sidecar(
+    registry: &Arc<SidecarRegistry>,
+    name: &str,
+    pid: u32,
+    exe: Option<String>,
+    args: Vec<String>,
+) {
+    registry.add(SidecarRecord {
+        name: name.to_string(),
+        pid,
+        exe,
+        args,
+    });
 }
 
 /// Ring buffer for log entries. Thread-safe, capped at 1000 entries.
@@ -179,12 +335,15 @@ pub fn create_log_layer(
 
 /// Spawn a sidecar process with monitored stdout/stderr.
 /// Lines from stdout are logged as "info", lines from stderr as "warn".
-/// Returns the `std::process::Child` handle.
+/// Returns the `std::process::Child` handle. If a `SidecarRegistry` is
+/// supplied (recommended), the child is also recorded for `/process` and
+/// `/health` responses; pass `None` to opt out of registry tracking.
 pub fn spawn_sidecar_monitored(
     name: &str,
     command: &str,
     args: &[&str],
     log_buffer: &Arc<LogBuffer>,
+    registry: Option<&Arc<SidecarRegistry>>,
 ) -> Result<std::process::Child, String> {
     let mut child = Command::new(command)
         .args(args)
@@ -192,6 +351,15 @@ pub fn spawn_sidecar_monitored(
         .stderr(Stdio::piped())
         .spawn()
         .map_err(|e| format!("Failed to spawn sidecar {name}: {e}"))?;
+
+    if let Some(reg) = registry {
+        reg.add(SidecarRecord {
+            name: name.to_string(),
+            pid: child.id(),
+            exe: Some(command.to_string()),
+            args: args.iter().map(|s| s.to_string()).collect(),
+        });
+    }
 
     let source = format!("sidecar:{name}");
 
@@ -263,9 +431,16 @@ pub fn __dev_bridge_result(
 }
 
 /// Start the development bridge HTTP server.
-/// Returns the port number and log buffer on success.
-/// The log buffer can be used with `spawn_sidecar_monitored()` to capture sidecar output.
-pub fn start_bridge(app: &AppHandle) -> Result<(u16, Arc<LogBuffer>), String> {
+///
+/// Returns the bound port, a shared log buffer, and a sidecar registry. Both
+/// the buffer and registry are intended to be passed back to
+/// `spawn_sidecar_monitored` for any sidecar processes you launch; the
+/// registry is what powers the `/process` and `/health` endpoints' visibility
+/// into the process tree. Callers that don't spawn sidecars can ignore the
+/// registry handle.
+pub fn start_bridge(
+    app: &AppHandle,
+) -> Result<(u16, Arc<LogBuffer>, Arc<SidecarRegistry>), String> {
     let server =
         Server::http("127.0.0.1:0").map_err(|e| format!("Failed to start bridge: {e}"))?;
     let port = server
@@ -311,27 +486,47 @@ pub fn start_bridge(app: &AppHandle) -> Result<(u16, Arc<LogBuffer>), String> {
     });
     app.manage(pending.clone());
 
+    // Sidecar registry — exposed to integrators via the return tuple and
+    // consulted by /process and /health.
+    let sidecar_registry = Arc::new(SidecarRegistry::new());
+    app.manage(sidecar_registry.clone());
+
+    // Capture process start metadata once so /process and /health don't pay
+    // for the lookup on every request.
+    let start_instant = Instant::now();
+    let tauri_pid = std::process::id();
+    let tauri_exe = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.to_str().map(|s| s.to_string()));
+    let tauri_args: Vec<String> = std::env::args().collect();
+
     let app_handle = app.clone();
     let expected_token = token.clone();
     let server_log_buffer = log_buffer.clone();
+    let server_registry = sidecar_registry.clone();
 
     thread::spawn(move || {
         // Keep _guard alive for the lifetime of the server thread
         let _cleanup = _guard;
 
-        for request in server.incoming_requests() {
+        for mut request in server.incoming_requests() {
             let is_post = request.method().as_str() == "POST";
             let url = request.url().to_string();
 
-            // Handle GET /version (no auth needed)
+            // Handle GET /version (no auth needed). Clients feature-detect
+            // newer endpoints by checking the `endpoints` array.
             if url == "/version" && request.method().as_str() == "GET" {
                 let resp = VersionResponse {
-                    version: "0.6.0".to_string(),
+                    version: BRIDGE_VERSION.to_string(),
                     endpoints: vec![
                         "/eval".to_string(),
                         "/logs".to_string(),
                         "/describe".to_string(),
                         "/version".to_string(),
+                        "/process".to_string(),
+                        "/capabilities".to_string(),
+                        "/devtools".to_string(),
+                        "/health".to_string(),
                     ],
                 };
                 let json = serde_json::to_string(&resp).unwrap();
@@ -340,7 +535,11 @@ pub fn start_bridge(app: &AppHandle) -> Result<(u16, Arc<LogBuffer>), String> {
                 continue;
             }
 
-            if !is_post || (url != "/eval" && url != "/logs" && url != "/describe") {
+            let known_post = matches!(
+                url.as_str(),
+                "/eval" | "/logs" | "/describe" | "/process" | "/capabilities" | "/devtools" | "/health"
+            );
+            if !is_post || !known_post {
                 let _ = request.respond(Response::from_string("Not found").with_status_code(404));
                 continue;
             }
@@ -372,6 +571,113 @@ pub fn start_bridge(app: &AppHandle) -> Result<(u16, Arc<LogBuffer>), String> {
 
                 let entries = server_log_buffer.drain();
                 let resp = LogResponse { entries };
+                let json = serde_json::to_string(&resp).unwrap();
+                let header = Header::from_bytes("Content-Type", "application/json").unwrap();
+                let _ = request.respond(Response::from_string(json).with_header(header));
+                continue;
+            }
+
+            // Handle /process endpoint — Tauri PID + sidecar registry snapshot.
+            if url == "/process" {
+                let req: AuthedRequest = match serde_json::from_str(&body) {
+                    Ok(r) => r,
+                    Err(_) => {
+                        let _ = request
+                            .respond(Response::from_string("Invalid JSON").with_status_code(400));
+                        continue;
+                    }
+                };
+                if req.token != expected_token {
+                    let _ = request
+                        .respond(Response::from_string("Unauthorized").with_status_code(401));
+                    continue;
+                }
+                let resp = ProcessResponse {
+                    tauri: TauriProcessInfo {
+                        pid: tauri_pid,
+                        exe: tauri_exe.clone(),
+                        args: tauri_args.clone(),
+                        uptime_ms: start_instant.elapsed().as_millis() as u64,
+                    },
+                    sidecars: server_registry.snapshot(),
+                };
+                let json = serde_json::to_string(&resp).unwrap();
+                let header = Header::from_bytes("Content-Type", "application/json").unwrap();
+                let _ = request.respond(Response::from_string(json).with_header(header));
+                continue;
+            }
+
+            // Handle /capabilities endpoint — declared Tauri capability set per window.
+            if url == "/capabilities" {
+                let req: AuthedRequest = match serde_json::from_str(&body) {
+                    Ok(r) => r,
+                    Err(_) => {
+                        let _ = request
+                            .respond(Response::from_string("Invalid JSON").with_status_code(400));
+                        continue;
+                    }
+                };
+                if req.token != expected_token {
+                    let _ = request
+                        .respond(Response::from_string("Unauthorized").with_status_code(401));
+                    continue;
+                }
+
+                let windows: Vec<String> = app_handle.webview_windows().keys().cloned().collect();
+                let declared = collect_declared_capabilities(&app_handle);
+                let resp = CapabilitiesResponse { declared, windows };
+                let json = serde_json::to_string(&resp).unwrap();
+                let header = Header::from_bytes("Content-Type", "application/json").unwrap();
+                let _ = request.respond(Response::from_string(json).with_header(header));
+                continue;
+            }
+
+            // Handle /devtools endpoint — inspector URL or platform hint.
+            if url == "/devtools" {
+                let req: AuthedRequest = match serde_json::from_str(&body) {
+                    Ok(r) => r,
+                    Err(_) => {
+                        let _ = request
+                            .respond(Response::from_string("Invalid JSON").with_status_code(400));
+                        continue;
+                    }
+                };
+                if req.token != expected_token {
+                    let _ = request
+                        .respond(Response::from_string("Unauthorized").with_status_code(401));
+                    continue;
+                }
+                let resp = devtools_response();
+                let json = serde_json::to_string(&resp).unwrap();
+                let header = Header::from_bytes("Content-Type", "application/json").unwrap();
+                let _ = request.respond(Response::from_string(json).with_header(header));
+                continue;
+            }
+
+            // Handle /health endpoint — quick "is this app sick" check.
+            if url == "/health" {
+                let req: AuthedRequest = match serde_json::from_str(&body) {
+                    Ok(r) => r,
+                    Err(_) => {
+                        let _ = request
+                            .respond(Response::from_string("Invalid JSON").with_status_code(400));
+                        continue;
+                    }
+                };
+                if req.token != expected_token {
+                    let _ = request
+                        .respond(Response::from_string("Unauthorized").with_status_code(401));
+                    continue;
+                }
+                let sidecars = server_registry.snapshot();
+                let sidecars_alive = sidecars.iter().all(|s| matches!(s.alive, Some(true) | None));
+                let webview_ready = !app_handle.webview_windows().is_empty();
+                let resp = HealthResponse {
+                    uptime_ms: start_instant.elapsed().as_millis() as u64,
+                    webview_ready,
+                    sidecars_alive,
+                    sidecars,
+                };
                 let json = serde_json::to_string(&resp).unwrap();
                 let header = Header::from_bytes("Content-Type", "application/json").unwrap();
                 let _ = request.respond(Response::from_string(json).with_header(header));
@@ -522,8 +828,115 @@ pub fn start_bridge(app: &AppHandle) -> Result<(u16, Arc<LogBuffer>), String> {
         }
     });
 
-    eprintln!("Dev bridge started on port {port}");
+    eprintln!("Dev bridge {BRIDGE_VERSION} started on port {port}");
     eprintln!("Token file: {token_path}");
 
-    Ok((port, log_buffer))
+    Ok((port, log_buffer, sidecar_registry))
+}
+
+/// Read declared capabilities from tauri.conf.json via `app.config()`. Returns
+/// a flat list of capability entries. Tauri 2 lets capabilities be either bare
+/// permission identifiers (strings) or full inline definitions; we surface
+/// both as `CapabilityEntry` rows with `permissions` populated where possible.
+fn collect_declared_capabilities(app: &AppHandle) -> Vec<CapabilityEntry> {
+    let config = app.config();
+    let security = &config.app.security;
+    let mut out = Vec::new();
+    for cap in &security.capabilities {
+        let raw = serde_json::to_value(cap).unwrap_or(serde_json::Value::Null);
+        match &raw {
+            serde_json::Value::String(s) => {
+                // Capability declared by reference to a JSON file. We don't have
+                // the resolved contents at runtime here, but we surface the
+                // identifier so callers know what was requested.
+                out.push(CapabilityEntry {
+                    identifier: s.clone(),
+                    description: None,
+                    windows: Vec::new(),
+                    permissions: Vec::new(),
+                });
+            }
+            serde_json::Value::Object(map) => {
+                let identifier = map
+                    .get("identifier")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("<inline>")
+                    .to_string();
+                let description = map
+                    .get("description")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string());
+                let windows: Vec<String> = map
+                    .get("windows")
+                    .and_then(|v| v.as_array())
+                    .map(|arr| {
+                        arr.iter()
+                            .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                let permissions: Vec<String> = map
+                    .get("permissions")
+                    .and_then(|v| v.as_array())
+                    .map(|arr| {
+                        arr.iter()
+                            .filter_map(|v| match v {
+                                serde_json::Value::String(s) => Some(s.clone()),
+                                serde_json::Value::Object(o) => o
+                                    .get("identifier")
+                                    .and_then(|i| i.as_str())
+                                    .map(|s| s.to_string()),
+                                _ => None,
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                out.push(CapabilityEntry {
+                    identifier,
+                    description,
+                    windows,
+                    permissions,
+                });
+            }
+            _ => {}
+        }
+    }
+    out
+}
+
+/// Build a `/devtools` response for the current platform. v1 emits useful
+/// hints rather than always producing a hot inspector URL — Safari attach on
+/// macOS requires UI activation, Windows WebView2 needs a launch-time arg.
+fn devtools_response() -> DevtoolsResponse {
+    if cfg!(target_os = "macos") {
+        DevtoolsResponse {
+            platform: "wkwebview".to_string(),
+            inspectable: cfg!(debug_assertions),
+            url: None,
+            hint: "Open Safari > Develop > <Mac name> > <App name> to attach. \
+                Requires the app to be built with debug_assertions (i.e., `tauri dev`)."
+                .to_string(),
+        }
+    } else if cfg!(target_os = "windows") {
+        let port = std::env::var("WEBVIEW2_REMOTE_DEBUGGING_PORT").ok();
+        let url = port.as_ref().map(|p| format!("http://127.0.0.1:{p}"));
+        DevtoolsResponse {
+            platform: "webview2".to_string(),
+            inspectable: url.is_some(),
+            url,
+            hint: "Set WEBVIEW2_REMOTE_DEBUGGING_PORT=9222 before launching, \
+                then open http://127.0.0.1:9222 in Chrome/Edge to inspect."
+                .to_string(),
+        }
+    } else {
+        let inspector = std::env::var("WEBKIT_INSPECTOR_SERVER").ok();
+        DevtoolsResponse {
+            platform: "webkitgtk".to_string(),
+            inspectable: inspector.is_some(),
+            url: inspector.as_ref().map(|s| format!("http://{s}")),
+            hint: "Export WEBKIT_INSPECTOR_SERVER=127.0.0.1:9222 before launching, \
+                then open http://127.0.0.1:9222 to inspect."
+                .to_string(),
+        }
+    }
 }

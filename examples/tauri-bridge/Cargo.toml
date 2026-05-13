@@ -4,6 +4,9 @@ version = "0.1.0"
 edition = "2021"
 description = "Example Tauri app with dev bridge for tauri-agent-tools"
 
+[build-dependencies]
+tauri-build = "2"
+
 [dependencies]
 tauri = { version = "2", features = ["devtools"] }
 tiny_http = "0.12"
@@ -14,3 +17,6 @@ rand = "0.8"
 uuid = { version = "1", features = ["v4"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["registry"] }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
