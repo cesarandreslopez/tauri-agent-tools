@@ -60,7 +60,7 @@ When you know what you're looking at, jump straight to:
 | Symptom | First command |
 |---------|---------------|
 | Don't know — give me everything | `tauri-agent-tools diagnose -o ./diag` |
-| App is running and bridge is responding | Use the 25 bridge-mediated commands (`screenshot`, `dom`, `eval`, …) |
+| App is running and bridge is responding | Use the bridge-mediated commands listed above (`screenshot`, `dom`, `eval`, …) |
 | Bridge isn't responding (release build, app crashed, pre-webview boot failure) | `tauri-agent-tools forensics -o ./forensics-out` |
 | You only have the bundle id, no source tree | `tauri-agent-tools app-paths --identifier com.example.app --platform all --exists` |
 | Need a structured snapshot of `tauri.conf.json` + capabilities | `tauri-agent-tools config inspect --json` |
@@ -315,6 +315,17 @@ tauri-agent-tools eval "document.title" --window-label overlay --json
 | `capture` | `-o <dir>`, `-s <css>`, `--logs-duration <ms>`, `--json` | yes | Full debug evidence bundle |
 | `check` | `--selector`, `--text`, `--eval`, `--no-errors`, `--json` | yes | Structured assertions (exit 0/1) |
 | `store-inspect` | `--framework`, `--store <name>`, `--depth <n>`, `--json` | yes | Inspect reactive store state |
+| `app-paths` | `--config <path>`, `--identifier <id>`, `--platform <os>`, `--exists`, `--json` | no | Resolve Tauri 2 app's OS data/log/cache/config dirs |
+| `config inspect` | `--config <path>`, `--capabilities-dir <path>`, `--cargo-toml <path>`, `--json` | no | Structured `tauri.conf.json` snapshot + capability audit |
+| `os-logs` | `--identifier <id>`, `--level <lvl>`, `--source <src>`, `--since <dur>`, `--duration <ms>`, `--json` | no | Tail host OS log stream filtered to a Tauri bundle id |
+| `sidecar tap` | `-- <cmd...>`, `--schema <path>`, `--record <path>`, `--raw`, `--json` | no | Wrap-and-run a sidecar, frame NDJSON, validate envelopes |
+| `sidecar replay` | `<file>`, `--to-exec <cmd>`, `--rate <lps>`, `--loop` | no | Replay a recorded NDJSON sidecar stream |
+| `forensics` | `--config <path>`, `--identifier <id>`, `-o <dir>`, `--since <dur>`, `--json` | no | One-shot forensic bundle (works on dead apps) |
+| `process-tree` | `--json` | yes (v0.7+) | Tauri PID + registered sidecars with alive/DEAD status |
+| `capabilities audit` | `--json` | yes (v0.7+) | Live Devtron-style audit of declared Tauri capabilities |
+| `webview attach` | `--print-url`, `--open`, `--json` | yes (v0.7+) | Print webview inspector URL or platform hint |
+| `health` | `--json` | yes (v0.7+) | Uptime + webview/sidecar liveness (exit non-zero if unhealthy) |
+| `diagnose` | `--config <path>`, `-o <dir>`, `--since <dur>`, `--no-bridge`, `--json` | optional | Best-effort super-bundle (forensics + live bridge enrichment) |
 
 ## Targeting Flags
 
