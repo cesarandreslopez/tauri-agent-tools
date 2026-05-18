@@ -57,7 +57,7 @@ tauri-agent-tools eval "JSON.stringify({url: location.href, ready: document.read
 ### Check Tauri API availability
 
 ```bash
-tauri-agent-tools eval "!!window.__TAURI__"
+tauri-agent-tools eval "!!(window.__TAURI_INTERNALS__ || window.__TAURI__)"
 ```
 
 ```

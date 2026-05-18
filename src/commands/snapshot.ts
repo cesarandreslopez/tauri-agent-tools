@@ -16,7 +16,7 @@ const PAGE_STATE_SCRIPT = `(() => {
     viewport: { width: window.innerWidth, height: window.innerHeight },
     scroll: { x: Math.round(window.scrollX), y: Math.round(window.scrollY) },
     document: { width: document.documentElement.scrollWidth, height: document.documentElement.scrollHeight },
-    hasTauri: !!(window.__TAURI__)
+    hasTauri: !!(window.__TAURI_INTERNALS__ || window.__TAURI__)
   });
 })()`;
 

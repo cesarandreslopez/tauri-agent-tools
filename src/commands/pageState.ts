@@ -3,14 +3,14 @@ import { addBridgeOptions, resolveBridge } from './shared.js';
 import { PageStateSchema } from '../schemas/commands.js';
 import type { PageState } from '../schemas/commands.js';
 
-const PAGE_STATE_SCRIPT = `(() => {
+export const PAGE_STATE_SCRIPT = `(() => {
   var state = {
     url: window.location.href,
     title: document.title,
     viewport: { width: window.innerWidth, height: window.innerHeight },
     scroll: { x: Math.round(window.scrollX), y: Math.round(window.scrollY) },
     document: { width: document.documentElement.scrollWidth, height: document.documentElement.scrollHeight },
-    hasTauri: !!(window.__TAURI__)
+    hasTauri: !!(window.__TAURI_INTERNALS__ || window.__TAURI__)
   };
   return JSON.stringify(state);
 })()`;

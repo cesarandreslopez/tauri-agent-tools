@@ -96,7 +96,7 @@ sequenceDiagram
     CLI->>Bridge: POST /eval {js, token}
     Bridge->>WV: eval(wrapped JS with callback)
     WV->>WV: Evaluate expression
-    WV->>Bridge: __TAURI__.core.invoke("__dev_bridge_result", {id, value})
+    WV->>Bridge: __TAURI_INTERNALS__.invoke("__dev_bridge_result", {id, value})
     Bridge-->>CLI: {result}
 ```
 
@@ -104,7 +104,7 @@ sequenceDiagram
 2. A token file with `{ port, token, pid }` is written to `/tmp/`
 3. `tauri-agent-tools` discovers the token file and authenticates via the token
 4. Requests are `POST /eval { js, token }` — the bridge injects JS into the webview
-5. The injected JS evaluates the expression, then calls back into Rust via `window.__TAURI__.core.invoke()` to deliver the result
+5. The injected JS evaluates the expression, then calls back into Rust via `window.__TAURI_INTERNALS__.invoke()` to deliver the result, falling back to `window.__TAURI__.core.invoke()` for older/global-enabled apps
 6. The HTTP handler waits for the result (up to 5 seconds) and returns it as JSON
 7. The token file is cleaned up when the app exits (via `scopeguard`)
 
@@ -126,6 +126,10 @@ The CLI couldn't find a token file in `/tmp/`. Check:
 - Is `dev_bridge::start_bridge()` being called in `.setup()`?
 - Is `cfg!(debug_assertions)` true (dev mode, not release)?
 - Check for token files: `ls /tmp/tauri-dev-bridge-*.token`
+
+### "Eval timeout: no result callback received"
+
+Re-copy `examples/tauri-bridge/src/dev_bridge.rs` from the latest package. Current bridge code uses Tauri 2's always-present `window.__TAURI_INTERNALS__.invoke()` callback path and does **not** require `app.withGlobalTauri: true`. Older copied bridge files used `window.__TAURI__.core.invoke()` and can time out in apps that keep Tauri's global API disabled.
 
 ### Stale token files
 

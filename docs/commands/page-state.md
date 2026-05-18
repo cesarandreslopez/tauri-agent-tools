@@ -57,5 +57,5 @@ tauri-agent-tools page-state --json
 
 - `viewport` shows `window.innerWidth` / `window.innerHeight`
 - `document` shows `document.documentElement.scrollWidth` / `scrollHeight`
-- `hasTauri` indicates whether `window.__TAURI__` is defined
+- `hasTauri` indicates whether Tauri's internal or global API is present in the webview
 - Useful for checking the webview state before taking screenshots or running other commands

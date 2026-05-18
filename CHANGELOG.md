@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Bridge auto-discovery now scans both `os.tmpdir()` and `/tmp`, fixing macOS when the Rust dev bridge writes token files to `/tmp`.
+- Dev bridge eval callbacks now use Tauri 2's `window.__TAURI_INTERNALS__.invoke` path first, so apps no longer need `app.withGlobalTauri: true` for bridge-backed commands.
 
 ## [0.7.0] - 2026-05-13
 

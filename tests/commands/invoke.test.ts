@@ -8,9 +8,18 @@ vi.mock('../../src/bridge/tokenDiscovery.js', () => ({
 
 describe('invoke command', () => {
   describe('buildInvokeScript', () => {
-    it('generates a script that calls window.__TAURI__.core.invoke', () => {
+    function runInvokeScript(script: string, windowObj: unknown): Promise<string> {
+      return new Function('window', `return ${script};`)(windowObj) as Promise<string>;
+    }
+
+    it('generates a script that prefers window.__TAURI_INTERNALS__.invoke', () => {
       const script = buildInvokeScript('my_command', {});
-      expect(script).toContain('window.__TAURI__.core.invoke');
+      const internals = script.indexOf('window.__TAURI_INTERNALS__.invoke');
+      const global = script.indexOf('window.__TAURI__.core.invoke');
+
+      expect(internals).toBeGreaterThanOrEqual(0);
+      expect(global).toBeGreaterThanOrEqual(0);
+      expect(internals).toBeLessThan(global);
       expect(script).toContain('"my_command"');
     });
 
@@ -20,16 +29,47 @@ describe('invoke command', () => {
       expect(script).toContain('})()');
     });
 
-    it('checks for window.__TAURI__ and window.__TAURI__.core', () => {
+    it('keeps window.__TAURI__.core.invoke as a fallback', () => {
       const script = buildInvokeScript('cmd', {});
+      expect(script).toContain('window.__TAURI_INTERNALS__');
       expect(script).toContain('window.__TAURI__');
       expect(script).toContain('window.__TAURI__.core');
     });
 
-    it('returns error JSON when __TAURI__ is missing', () => {
+    it('returns error JSON when no Tauri invoke API is available', () => {
       const script = buildInvokeScript('cmd', {});
-      expect(script).toContain('window.__TAURI__.core not found');
+      expect(script).toContain('Tauri invoke API not found');
       expect(script).toContain('success: false');
+    });
+
+    it('calls __TAURI_INTERNALS__.invoke when the global Tauri API is disabled', async () => {
+      const invoke = vi.fn().mockResolvedValue({ ok: true });
+      const script = buildInvokeScript('cmd', { id: 1 });
+      const raw = await runInvokeScript(script, {
+        __TAURI_INTERNALS__: { invoke },
+      });
+
+      expect(invoke).toHaveBeenCalledWith('cmd', { id: 1 });
+      expect(JSON.parse(raw)).toEqual({
+        success: true,
+        command: 'cmd',
+        result: { ok: true },
+      });
+    });
+
+    it('falls back to window.__TAURI__.core.invoke', async () => {
+      const invoke = vi.fn().mockResolvedValue('ok');
+      const script = buildInvokeScript('cmd', {});
+      const raw = await runInvokeScript(script, {
+        __TAURI__: { core: { invoke } },
+      });
+
+      expect(invoke).toHaveBeenCalledWith('cmd', {});
+      expect(JSON.parse(raw)).toEqual({
+        success: true,
+        command: 'cmd',
+        result: 'ok',
+      });
     });
 
     it('serializes args correctly', () => {

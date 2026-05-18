@@ -430,6 +430,57 @@ pub fn __dev_bridge_result(
     state.notify.notify_all();
 }
 
+const EVAL_TIMEOUT_MESSAGE: &str = "Eval timeout: no result callback received. Re-copy examples/tauri-bridge/src/dev_bridge.rs from tauri-agent-tools 0.7.0+ and verify Tauri IPC is available.";
+
+fn build_eval_callback_js(js: &str, request_id: &str) -> String {
+    format!(
+        r#"
+                    (async () => {{
+                        const __getDevBridgeInvoke = () => {{
+                            if (window.__TAURI_INTERNALS__ && typeof window.__TAURI_INTERNALS__.invoke === "function") {{
+                                return window.__TAURI_INTERNALS__.invoke.bind(window.__TAURI_INTERNALS__);
+                            }}
+                            if (window.__TAURI__ && window.__TAURI__.core && typeof window.__TAURI__.core.invoke === "function") {{
+                                return window.__TAURI__.core.invoke.bind(window.__TAURI__.core);
+                            }}
+                            return null;
+                        }};
+
+                        let __devBridgeInvoke = __getDevBridgeInvoke();
+                        try {{
+                            if (!__devBridgeInvoke) {{
+                                throw new Error("Tauri invoke API not found: expected window.__TAURI_INTERNALS__.invoke or window.__TAURI__.core.invoke");
+                            }}
+                            let __result = await eval({js});
+                            if (typeof __result === "undefined") {{
+                                __result = null;
+                            }} else if (typeof __result === "object" && __result !== null) {{
+                                __result = JSON.stringify(__result);
+                            }} else if (typeof __result !== "string") {{
+                                __result = String(__result);
+                            }}
+                            await __devBridgeInvoke("__dev_bridge_result", {{
+                                id: {id},
+                                value: __result
+                            }});
+                        }} catch(e) {{
+                            __devBridgeInvoke = __devBridgeInvoke || __getDevBridgeInvoke();
+                            if (!__devBridgeInvoke) {{
+                                throw e;
+                            }}
+                            const __message = e && e.message ? e.message : String(e);
+                            await __devBridgeInvoke("__dev_bridge_result", {{
+                                id: {id},
+                                value: "ERROR: " + __message
+                            }});
+                        }}
+                    }})();
+                    "#,
+        js = serde_json::to_string(js).unwrap(),
+        id = serde_json::to_string(request_id).unwrap(),
+    )
+}
+
 /// Start the development bridge HTTP server.
 ///
 /// Returns the bound port, a shared log buffer, and a sidecar registry. Both
@@ -747,36 +798,18 @@ pub fn start_bridge(
             let window_label = eval_req.window.as_deref().unwrap_or("main");
             if let Some(window) = app_handle.get_webview_window(window_label) {
                 // Build JS that evaluates the expression, then calls back into Rust
-                // via __TAURI__.core.invoke() to deliver the result.
-                let callback_js = format!(
-                    r#"
-                    (async () => {{
-                        try {{
-                            let __result = await eval({js});
-                            if (typeof __result === "undefined") {{
-                                __result = null;
-                            }} else if (typeof __result === "object" && __result !== null) {{
-                                __result = JSON.stringify(__result);
-                            }} else if (typeof __result !== "string") {{
-                                __result = String(__result);
-                            }}
-                            await window.__TAURI__.core.invoke("__dev_bridge_result", {{
-                                id: {id},
-                                value: __result
-                            }});
-                        }} catch(e) {{
-                            await window.__TAURI__.core.invoke("__dev_bridge_result", {{
-                                id: {id},
-                                value: "ERROR: " + e.message
-                            }});
-                        }}
-                    }})();
-                    "#,
-                    js = serde_json::to_string(&eval_req.js).unwrap(),
-                    id = serde_json::to_string(&request_id).unwrap(),
-                );
+                // via Tauri's invoke API to deliver the result. Prefer the
+                // internal global because Tauri 2 does not expose __TAURI__
+                // unless app.withGlobalTauri is enabled.
+                let callback_js = build_eval_callback_js(&eval_req.js, &request_id);
 
-                let _ = window.eval(&callback_js);
+                if let Err(e) = window.eval(&callback_js) {
+                    let _ = request.respond(
+                        Response::from_string(format!("Eval injection failed: {e}"))
+                            .with_status_code(500),
+                    );
+                    continue;
+                }
 
                 // Wait for the result with a 5-second timeout
                 let mut results = pending.results.lock().unwrap();
@@ -799,7 +832,7 @@ pub fn start_bridge(
                         // Timeout — clean up and respond with 504
                         results.remove(&request_id);
                         let _ = request.respond(
-                            Response::from_string("Eval timeout").with_status_code(504),
+                            Response::from_string(EVAL_TIMEOUT_MESSAGE).with_status_code(504),
                         );
                         break;
                     }
@@ -812,7 +845,7 @@ pub fn start_bridge(
                     if timeout_result.timed_out() && !results.contains_key(&request_id) {
                         results.remove(&request_id);
                         let _ = request.respond(
-                            Response::from_string("Eval timeout").with_status_code(504),
+                            Response::from_string(EVAL_TIMEOUT_MESSAGE).with_status_code(504),
                         );
                         break;
                     }
@@ -832,6 +865,53 @@ pub fn start_bridge(
     eprintln!("Token file: {token_path}");
 
     Ok((port, log_buffer, sidecar_registry))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn eval_callback_prefers_tauri_internals() {
+        let script = build_eval_callback_js("document.title", "request-1");
+        let internals = script.find("window.__TAURI_INTERNALS__.invoke").unwrap();
+        let global = script.find("window.__TAURI__.core.invoke").unwrap();
+
+        assert!(internals < global);
+    }
+
+    #[test]
+    fn eval_callback_keeps_global_tauri_fallback() {
+        let script = build_eval_callback_js("document.title", "request-1");
+
+        assert!(script.contains("window.__TAURI__.core.invoke"));
+        assert!(!script.contains("app.withGlobalTauri"));
+    }
+
+    #[test]
+    fn eval_callback_safely_embeds_js_and_request_id() {
+        let js = r#"document.querySelector("[data-name=\"x\"]").textContent"#;
+        let request_id = r#"request-"quoted""#;
+        let script = build_eval_callback_js(js, request_id);
+
+        assert!(script.contains(&serde_json::to_string(js).unwrap()));
+        assert!(script.contains(&serde_json::to_string(request_id).unwrap()));
+    }
+
+    #[test]
+    fn eval_callback_uses_dev_bridge_result_command() {
+        let script = build_eval_callback_js("1 + 1", "request-1");
+
+        assert!(script.contains("__dev_bridge_result"));
+        assert!(!script.contains("await window.__TAURI__.core.invoke"));
+    }
+
+    #[test]
+    fn eval_timeout_message_is_actionable() {
+        assert!(EVAL_TIMEOUT_MESSAGE.contains("no result callback received"));
+        assert!(EVAL_TIMEOUT_MESSAGE.contains("Re-copy"));
+        assert!(EVAL_TIMEOUT_MESSAGE.contains("dev_bridge.rs"));
+    }
 }
 
 /// Read declared capabilities from tauri.conf.json via `app.config()`. Returns

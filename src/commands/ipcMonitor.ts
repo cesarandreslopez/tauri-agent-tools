@@ -5,17 +5,28 @@ import type { BridgeClient } from '../bridge/client.js';
 import { IpcEntrySchema } from '../schemas/commands.js';
 import type { IpcEntry } from '../schemas/commands.js';
 
-const PATCH_SCRIPT = `(() => {
+export const PATCH_SCRIPT = `(() => {
   if (window.__tauriDevToolsPatched) return 'already_patched';
-  if (!window.__TAURI__ || !window.__TAURI__.core || !window.__TAURI__.core.invoke) {
+  function getInvokeTarget() {
+    if (window.__TAURI_INTERNALS__ && typeof window.__TAURI_INTERNALS__.invoke === 'function') {
+      return { owner: window.__TAURI_INTERNALS__, invoke: window.__TAURI_INTERNALS__.invoke };
+    }
+    if (window.__TAURI__ && window.__TAURI__.core && typeof window.__TAURI__.core.invoke === 'function') {
+      return { owner: window.__TAURI__.core, invoke: window.__TAURI__.core.invoke };
+    }
+    return null;
+  }
+  var target = getInvokeTarget();
+  if (!target) {
     return 'no_tauri';
   }
-  window.__tauriDevToolsOriginalInvoke = window.__TAURI__.core.invoke;
+  window.__tauriDevToolsOriginalInvoke = target.invoke;
+  window.__tauriDevToolsInvokeOwner = target.owner;
   window.__tauriDevToolsIpcLog = [];
-  window.__TAURI__.core.invoke = function(cmd, args) {
+  target.owner.invoke = function(cmd, args, options) {
     var entry = { command: cmd, args: args || {}, timestamp: Date.now() };
     var start = performance.now();
-    return window.__tauriDevToolsOriginalInvoke.call(this, cmd, args).then(function(result) {
+    return window.__tauriDevToolsOriginalInvoke.call(this, cmd, args, options).then(function(result) {
       entry.duration = Math.round(performance.now() - start);
       entry.result = result;
       window.__tauriDevToolsIpcLog.push(entry);
@@ -31,16 +42,17 @@ const PATCH_SCRIPT = `(() => {
   return 'patched';
 })()`;
 
-const DRAIN_SCRIPT = `(() => {
+export const DRAIN_SCRIPT = `(() => {
   var log = window.__tauriDevToolsIpcLog || [];
   window.__tauriDevToolsIpcLog = [];
   return JSON.stringify(log);
 })()`;
 
-const CLEANUP_SCRIPT = `(() => {
-  if (window.__tauriDevToolsOriginalInvoke) {
-    window.__TAURI__.core.invoke = window.__tauriDevToolsOriginalInvoke;
+export const CLEANUP_SCRIPT = `(() => {
+  if (window.__tauriDevToolsOriginalInvoke && window.__tauriDevToolsInvokeOwner) {
+    window.__tauriDevToolsInvokeOwner.invoke = window.__tauriDevToolsOriginalInvoke;
     delete window.__tauriDevToolsOriginalInvoke;
+    delete window.__tauriDevToolsInvokeOwner;
     delete window.__tauriDevToolsIpcLog;
     delete window.__tauriDevToolsPatched;
   }
@@ -98,7 +110,7 @@ export function registerIpcMonitor(program: Command): void {
     const patchResult = await bridge.eval(PATCH_SCRIPT);
     if (patchResult === 'no_tauri') {
       throw new Error(
-        'window.__TAURI__.core.invoke not found. Is this a Tauri app with IPC enabled?',
+        'Tauri invoke API not found. Expected window.__TAURI_INTERNALS__.invoke or window.__TAURI__.core.invoke.',
       );
     }
 

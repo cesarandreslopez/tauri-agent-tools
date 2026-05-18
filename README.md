@@ -161,7 +161,7 @@ List all visible windows, marking Tauri apps.
 
 ### `ipc-monitor`
 
-Monitor Tauri IPC calls in real-time (read-only). Monkey-patches `window.__TAURI__.core.invoke` to capture calls, then polls and restores on exit.
+Monitor Tauri IPC calls in real-time (read-only). Monkey-patches Tauri's invoke API (`window.__TAURI_INTERNALS__.invoke`, falling back to `window.__TAURI__.core.invoke`) to capture calls, then polls and restores on exit.
 
 | Option | Description |
 |--------|-------------|

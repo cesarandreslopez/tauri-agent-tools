@@ -81,7 +81,7 @@ sequenceDiagram
     Bridge->>Bridge: Generate UUID request ID
     Bridge->>WV: eval(wrapped JS with callback)
     WV->>WV: Evaluate expression
-    WV->>Bridge: __TAURI__.core.invoke("__dev_bridge_result", {id, value})
+    WV->>Bridge: __TAURI_INTERNALS__.invoke("__dev_bridge_result", {id, value})
     Bridge->>Bridge: Match result by ID, unblock HTTP thread
     Bridge-->>CLI: {result: ...}
 

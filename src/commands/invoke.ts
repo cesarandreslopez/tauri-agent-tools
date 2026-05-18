@@ -8,14 +8,24 @@ export function buildInvokeScript(command: string, args: unknown): string {
   const commandJson = JSON.stringify(command);
   const argsJson = JSON.stringify(args);
   return `(async () => {
-  if (!window.__TAURI__ || !window.__TAURI__.core) {
-    return JSON.stringify({ success: false, command: ${commandJson}, error: 'window.__TAURI__.core not found' });
+  function getTauriInvoke() {
+    if (window.__TAURI_INTERNALS__ && typeof window.__TAURI_INTERNALS__.invoke === 'function') {
+      return window.__TAURI_INTERNALS__.invoke.bind(window.__TAURI_INTERNALS__);
+    }
+    if (window.__TAURI__ && window.__TAURI__.core && typeof window.__TAURI__.core.invoke === 'function') {
+      return window.__TAURI__.core.invoke.bind(window.__TAURI__.core);
+    }
+    return null;
+  }
+  var invoke = getTauriInvoke();
+  if (!invoke) {
+    return JSON.stringify({ success: false, command: ${commandJson}, error: 'Tauri invoke API not found: expected window.__TAURI_INTERNALS__.invoke or window.__TAURI__.core.invoke' });
   }
   try {
-    var result = await window.__TAURI__.core.invoke(${commandJson}, ${argsJson});
+    var result = await invoke(${commandJson}, ${argsJson});
     return JSON.stringify({ success: true, command: ${commandJson}, result: result });
   } catch (e) {
-    return JSON.stringify({ success: false, command: ${commandJson}, error: e.message });
+    return JSON.stringify({ success: false, command: ${commandJson}, error: e && e.message ? e.message : String(e) });
   }
 })()`;
 }

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { BridgeClient } from '../../src/bridge/client.js';
+import { PAGE_STATE_SCRIPT } from '../../src/commands/pageState.js';
 
 vi.mock('../../src/bridge/tokenDiscovery.js', () => ({
   discoverBridge: vi.fn().mockResolvedValue({ port: 9999, token: 'test' }),
@@ -77,6 +78,38 @@ describe('Page State', () => {
   });
 
   describe('bridge eval', () => {
+    function runPageStateScript(windowObj: Record<string, unknown>): {
+      hasTauri: boolean;
+    } {
+      const documentObj = {
+        title: 'Test App',
+        documentElement: {
+          scrollWidth: 800,
+          scrollHeight: 600,
+        },
+      };
+      const raw = new Function('window', 'document', `return ${PAGE_STATE_SCRIPT};`)(
+        {
+          location: { href: 'http://localhost:1420/' },
+          innerWidth: 800,
+          innerHeight: 600,
+          scrollX: 0,
+          scrollY: 0,
+          ...windowObj,
+        },
+        documentObj,
+      ) as string;
+      return JSON.parse(raw);
+    }
+
+    it('detects Tauri from __TAURI_INTERNALS__ when global API is disabled', () => {
+      expect(runPageStateScript({ __TAURI_INTERNALS__: { invoke: vi.fn() } }).hasTauri).toBe(true);
+    });
+
+    it('still detects Tauri from the legacy global API', () => {
+      expect(runPageStateScript({ __TAURI__: { core: { invoke: vi.fn() } } }).hasTauri).toBe(true);
+    });
+
     it('parses page state from bridge response', async () => {
       const pageState = {
         url: 'https://localhost:1420/',

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { BridgeClient } from '../../src/bridge/client.js';
+import { CLEANUP_SCRIPT, DRAIN_SCRIPT, PATCH_SCRIPT } from '../../src/commands/ipcMonitor.js';
 
 vi.mock('../../src/bridge/tokenDiscovery.js', () => ({
   discoverBridge: vi.fn().mockResolvedValue({ port: 9999, token: 'test' }),
@@ -7,6 +8,17 @@ vi.mock('../../src/bridge/tokenDiscovery.js', () => ({
 
 describe('IPC Monitor', () => {
   describe('patch injection', () => {
+    function runBrowserScript<T>(script: string, windowObj: Record<string, unknown>): T {
+      let now = 10;
+      const performanceObj = {
+        now: () => {
+          now += 5;
+          return now;
+        },
+      };
+      return new Function('window', 'performance', `return ${script};`)(windowObj, performanceObj) as T;
+    }
+
     it('generates valid patch script that returns status', async () => {
       const mockFetch = vi.fn().mockResolvedValue({
         ok: true,
@@ -22,6 +34,47 @@ describe('IPC Monitor', () => {
 
       expect(result).toBe('patched');
       vi.unstubAllGlobals();
+    });
+
+    it('patches window.__TAURI_INTERNALS__.invoke when available', async () => {
+      const originalInvoke = vi.fn().mockResolvedValue('ok');
+      const windowObj = {
+        __TAURI_INTERNALS__: { invoke: originalInvoke },
+      } as Record<string, unknown> & {
+        __TAURI_INTERNALS__: { invoke: (cmd: string, args?: unknown) => Promise<unknown> };
+      };
+
+      expect(runBrowserScript<string>(PATCH_SCRIPT, windowObj)).toBe('patched');
+      await expect(windowObj.__TAURI_INTERNALS__.invoke('get_data', { id: 1 })).resolves.toBe('ok');
+
+      expect(originalInvoke).toHaveBeenCalledWith('get_data', { id: 1 }, undefined);
+      const entries = JSON.parse(runBrowserScript<string>(DRAIN_SCRIPT, windowObj));
+      expect(entries).toHaveLength(1);
+      expect(entries[0].command).toBe('get_data');
+      expect(entries[0].result).toBe('ok');
+
+      expect(runBrowserScript<string>(CLEANUP_SCRIPT, windowObj)).toBe('cleaned');
+      expect(windowObj.__TAURI_INTERNALS__.invoke).toBe(originalInvoke);
+    });
+
+    it('falls back to window.__TAURI__.core.invoke', async () => {
+      const originalInvoke = vi.fn().mockResolvedValue('ok');
+      const windowObj = {
+        __TAURI__: { core: { invoke: originalInvoke } },
+      } as Record<string, unknown> & {
+        __TAURI__: { core: { invoke: (cmd: string, args?: unknown) => Promise<unknown> } };
+      };
+
+      expect(runBrowserScript<string>(PATCH_SCRIPT, windowObj)).toBe('patched');
+      await expect(windowObj.__TAURI__.core.invoke('get_data', {})).resolves.toBe('ok');
+
+      expect(originalInvoke).toHaveBeenCalledWith('get_data', {}, undefined);
+      expect(runBrowserScript<string>(CLEANUP_SCRIPT, windowObj)).toBe('cleaned');
+      expect(windowObj.__TAURI__.core.invoke).toBe(originalInvoke);
+    });
+
+    it('reports no_tauri when no invoke API exists', () => {
+      expect(runBrowserScript<string>(PATCH_SCRIPT, {})).toBe('no_tauri');
     });
 
     it('drain script returns empty array by default', async () => {

@@ -3,7 +3,7 @@
 Monitor Tauri IPC calls in real-time (read-only).
 
 !!! note "Bridge Required"
-    This command requires an active bridge connection. The target app must use Tauri's `window.__TAURI__.core.invoke` API.
+    This command requires an active bridge connection and a Tauri IPC invoke API in the webview.
 
 ## Usage
 
@@ -68,7 +68,7 @@ tauri-agent-tools ipc-monitor --interval 100 --duration 5000
 
 ## How It Works
 
-1. Monkey-patches `window.__TAURI__.core.invoke` to capture calls
+1. Monkey-patches `window.__TAURI_INTERNALS__.invoke` to capture calls, falling back to `window.__TAURI__.core.invoke`
 2. Logs command name, arguments, timing, and result/error
 3. Polls the captured log at the specified interval
 4. Restores the original `invoke` function on exit (Ctrl+C or `--duration`)
@@ -76,5 +76,5 @@ tauri-agent-tools ipc-monitor --interval 100 --duration 5000
 ## Notes
 
 - The monkey-patch is read-only — it wraps the original function and passes through all calls and results
-- If `window.__TAURI__.core.invoke` is not found, the command reports an error
+- If neither invoke API is found, the command reports an error
 - Cleanup happens automatically on SIGINT/SIGTERM or when `--duration` expires

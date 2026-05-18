@@ -87,7 +87,7 @@ tauri-agent-tools eval "document.title"
 3. `tauri-agent-tools` discovers the token file and authenticates via the token
 4. The bridge exposes four endpoints: `POST /eval` (JS evaluation), `POST /logs` (Rust log retrieval), `POST /describe` (bridge metadata), and `GET /version` (unauthenticated health check)
 5. `/eval` accepts an optional `window` field to target specific webview windows (defaults to `"main"`)
-6. The injected JS evaluates the expression, then calls back into Rust via `window.__TAURI__.core.invoke("__dev_bridge_result", { id, value })` to deliver the result
+6. The injected JS evaluates the expression, then calls back into Rust via `window.__TAURI_INTERNALS__.invoke("__dev_bridge_result", { id, value })` to deliver the result, falling back to `window.__TAURI__.core.invoke()` for older/global-enabled apps
 7. The HTTP handler thread waits for the result (up to 5 seconds) and returns it as JSON
 8. `/logs` drains the ring buffer of captured `tracing` events and returns them as JSON
 9. `/describe` returns PID, window labels, and capabilities
@@ -100,6 +100,12 @@ tauri-agent-tools eval "document.title"
 - **Development only** — wrapped in `cfg!(debug_assertions)`, stripped in release builds
 - **Inspection is read-only** — inspection commands only read DOM state
 - **Interaction is debug-only** — interaction commands use eval-based DOM dispatch, sandboxed to the webview
+
+## Troubleshooting
+
+### `Eval timeout: no result callback received`
+
+Re-copy `examples/tauri-bridge/src/dev_bridge.rs` from the latest package. Current bridge code uses Tauri 2's always-present `window.__TAURI_INTERNALS__.invoke()` callback path and does **not** require `app.withGlobalTauri: true`. Older copied bridge files used `window.__TAURI__.core.invoke()` and can time out in apps that keep Tauri's global API disabled.
 
 ## Agent-Assisted Setup
 
