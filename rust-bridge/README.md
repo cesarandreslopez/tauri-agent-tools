@@ -16,6 +16,9 @@ rand = "0.8"
 uuid = { version = "1", features = ["v4"] }
 tracing = "0.1"
 tracing-subscriber = "0.3"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
 ```
 
 ### 2. Copy the bridge module
