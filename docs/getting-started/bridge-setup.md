@@ -120,7 +120,7 @@ sequenceDiagram
 
 ### "No bridge found"
 
-The CLI couldn't find a token file in `/tmp/`. Check:
+The CLI couldn't find a token file. It scans both Node's `os.tmpdir()` and `/tmp/` (the Rust bridge writes to `/tmp`). Check:
 
 - Is the Tauri app running in **dev mode** (`cargo tauri dev`)?
 - Is `dev_bridge::start_bridge()` being called in `.setup()`?

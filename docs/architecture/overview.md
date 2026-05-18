@@ -11,7 +11,7 @@ graph TD
     PA --> WL[Wayland Adapter<br/>swaymsg + grim]
     PA --> HY[Hyprland Adapter<br/>hyprctl + grim]
     PA --> MAC[macOS Adapter<br/>screencapture + osascript]
-    BC --> TD[Token Discovery<br/>/tmp/*.token]
+    BC --> TD[Token Discovery<br/>os.tmpdir + /tmp]
     BC --> BR[Tauri Bridge<br/>HTTP POST /eval]
     BR --> WV[Webview<br/>DOM + JS]
     CMD --> IMG[src/util/<br/>Image Pipeline]
@@ -88,7 +88,7 @@ All adapters use ImageMagick for crop/resize operations via `src/util/image.ts`.
 
 `src/bridge/tokenDiscovery.ts` handles bridge auto-discovery:
 
-1. Scan `/tmp/` for files matching `tauri-dev-bridge-*.token`
+1. Scan both Node's `os.tmpdir()` and `/tmp/` for files matching `tauri-dev-bridge-*.token` — the Rust bridge writes to `/tmp`, but on macOS `os.tmpdir()` returns `/var/folders/.../T/`, so both paths are checked
 2. Parse each as JSON: `{ port, token, pid }`
 3. Check PID liveness via `process.kill(pid, 0)`
 4. Remove stale token files from dead processes

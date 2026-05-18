@@ -7,10 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-05-18
+
 ### Fixed
 
-- Bridge auto-discovery now scans both `os.tmpdir()` and `/tmp`, fixing macOS when the Rust dev bridge writes token files to `/tmp`.
-- Dev bridge eval callbacks now use Tauri 2's `window.__TAURI_INTERNALS__.invoke` path first, so apps no longer need `app.withGlobalTauri: true` for bridge-backed commands.
+- Bridge auto-discovery now scans both `os.tmpdir()` and `/tmp`, fixing macOS where the Rust dev bridge writes token files to `/tmp` but Node's `os.tmpdir()` resolves to `/var/folders/.../T/`. Closes #5.
+- Dev bridge eval callbacks now use Tauri 2's `window.__TAURI_INTERNALS__.invoke` path first, so apps no longer need `app.withGlobalTauri: true` for bridge-backed commands (`dom`, `click`, `eval`, `page-state`, `screenshot --selector`, etc.). Closes #7.
+- Documented the missing `libc = "0.2"` Cargo dependency in `rust-bridge/README.md` and `docs/getting-started/bridge-setup.md`. The bridge's `/process` and `/health` endpoints depend on `libc::kill()` for sidecar liveness probing on Unix. Closes #6.
 
 ## [0.7.0] - 2026-05-13
 
