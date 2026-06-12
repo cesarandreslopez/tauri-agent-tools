@@ -87,16 +87,16 @@ export async function checkHyprlandTools(): Promise<ToolCheck[]> {
 }
 
 export async function checkMacOSTools(): Promise<ToolCheck[]> {
-  const [screencapture, osascript, sips, magick] = await Promise.all([
+  const [screencapture, python3, sips, magick] = await Promise.all([
     commandExists('screencapture').then((available) => ({
       name: 'screencapture',
       available,
       installHint: 'Built-in on macOS',
     })),
-    commandExists('osascript').then((available) => ({
-      name: 'osascript',
+    commandExists('python3').then((available) => ({
+      name: 'python3',
       available,
-      installHint: 'Built-in on macOS',
+      installHint: 'macOS includes python3; install pyobjc-framework-Quartz with: pip3 install pyobjc-framework-Quartz',
     })),
     commandExists('sips').then((available) => ({
       name: 'sips',
@@ -105,7 +105,7 @@ export async function checkMacOSTools(): Promise<ToolCheck[]> {
     })),
     checkImageMagick('brew install imagemagick'),
   ]);
-  return [screencapture, osascript, sips, magick];
+  return [screencapture, python3, sips, magick];
 }
 
 export async function ensureTools(displayServer: DisplayServer): Promise<void> {

@@ -8,28 +8,30 @@ import { exec, validateWindowId } from '../util/exec.js';
 import { CGWindowInfoSchema } from '../schemas/platform.js';
 import type { CGWindowInfo } from '../schemas/platform.js';
 
-async function runJxa(script: string): Promise<string> {
-  const { stdout } = await exec('osascript', ['-l', 'JavaScript', '-e', script]);
-  return stdout.toString().trim();
-}
+const PYTHON_WINDOW_LIST_SCRIPT = `
+import json, sys
+from Quartz import CGWindowListCopyWindowInfo, kCGWindowListOptionOnScreenOnly, kCGNullWindowID
+windows = CGWindowListCopyWindowInfo(kCGWindowListOptionOnScreenOnly, kCGNullWindowID)
+result = []
+for w in windows:
+    result.append({
+        'kCGWindowNumber': w.get('kCGWindowNumber', 0),
+        'kCGWindowOwnerPID': w.get('kCGWindowOwnerPID', 0),
+        'kCGWindowName': w.get('kCGWindowName', '') or '',
+        'kCGWindowOwnerName': w.get('kCGWindowOwnerName', '') or '',
+        'kCGWindowBounds': {
+            'X': w.get('kCGWindowBounds', {}).get('X', 0),
+            'Y': w.get('kCGWindowBounds', {}).get('Y', 0),
+            'Width': w.get('kCGWindowBounds', {}).get('Width', 0),
+            'Height': w.get('kCGWindowBounds', {}).get('Height', 0),
+        }
+    })
+json.dump(result, sys.stdout)
+`;
 
 async function getWindowList(): Promise<CGWindowInfo[]> {
-  const script = `
-ObjC.import('CoreGraphics');
-var list = ObjC.deepUnwrap(
-  $.CGWindowListCopyWindowInfo($.kCGWindowListOptionOnScreenOnly, 0)
-);
-JSON.stringify(list.map(function(w) {
-  return {
-    kCGWindowNumber: w.kCGWindowNumber,
-    kCGWindowOwnerPID: w.kCGWindowOwnerPID || 0,
-    kCGWindowName: w.kCGWindowName || '',
-    kCGWindowOwnerName: w.kCGWindowOwnerName || '',
-    kCGWindowBounds: w.kCGWindowBounds
-  };
-}));`;
-
-  const raw = await runJxa(script);
+  const { stdout } = await exec('python3', ['-c', PYTHON_WINDOW_LIST_SCRIPT]);
+  const raw = stdout.toString().trim();
   const windows = z.array(CGWindowInfoSchema).parse(JSON.parse(raw));
 
   // Detect Screen Recording permission issue: all names empty
