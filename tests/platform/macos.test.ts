@@ -41,7 +41,7 @@ const windowList = [
   },
 ];
 
-function mockPythonWindowList(windows: object[]) {
+function mockJxaWindowList(windows: object[]) {
   mockExec.mockResolvedValueOnce({
     stdout: Buffer.from(JSON.stringify(windows)),
     stderr: '',
@@ -58,22 +58,22 @@ describe('MacOSAdapter', () => {
 
   describe('findWindow', () => {
     it('finds window by title', async () => {
-      mockPythonWindowList(windowList);
+      mockJxaWindowList(windowList);
 
       const id = await adapter.findWindow('Tauri');
       expect(id).toBe('1234');
-      expect(mockExec).toHaveBeenCalledWith('python3', ['-c', expect.any(String)]);
+      expect(mockExec).toHaveBeenCalledWith('osascript', ['-l', 'JavaScript', '-e', expect.any(String)]);
     });
 
     it('finds window by owner name', async () => {
-      mockPythonWindowList(windowList);
+      mockJxaWindowList(windowList);
 
       const id = await adapter.findWindow('Safari');
       expect(id).toBe('5678');
     });
 
     it('throws when no windows found', async () => {
-      mockPythonWindowList(windowList);
+      mockJxaWindowList(windowList);
 
       await expect(adapter.findWindow('Nonexistent')).rejects.toThrow(
         'No window found matching: Nonexistent',
@@ -149,7 +149,7 @@ describe('MacOSAdapter', () => {
 
   describe('getWindowGeometry', () => {
     it('returns window bounds from JXA', async () => {
-      mockPythonWindowList(windowList);
+      mockJxaWindowList(windowList);
 
       const geom = await adapter.getWindowGeometry('1234');
       expect(geom).toEqual({
@@ -163,7 +163,7 @@ describe('MacOSAdapter', () => {
     });
 
     it('throws when window ID not found', async () => {
-      mockPythonWindowList(windowList);
+      mockJxaWindowList(windowList);
 
       await expect(adapter.getWindowGeometry('9999')).rejects.toThrow(
         'Window 9999 not found',
@@ -173,7 +173,7 @@ describe('MacOSAdapter', () => {
 
   describe('getWindowName', () => {
     it('delegates to getWindowGeometry', async () => {
-      mockPythonWindowList(windowList);
+      mockJxaWindowList(windowList);
 
       const name = await adapter.getWindowName('1234');
       expect(name).toBe('My Tauri App');
@@ -182,7 +182,7 @@ describe('MacOSAdapter', () => {
 
   describe('listWindows', () => {
     it('returns all windows with names and PIDs', async () => {
-      mockPythonWindowList(windowList);
+      mockJxaWindowList(windowList);
 
       const windows = await adapter.listWindows();
       expect(windows).toHaveLength(2);
