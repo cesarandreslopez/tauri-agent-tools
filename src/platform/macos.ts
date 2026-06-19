@@ -13,23 +13,43 @@ async function runJxa(script: string): Promise<string> {
   return stdout.toString().trim();
 }
 
-async function getWindowList(): Promise<CGWindowInfo[]> {
-  const script = `
+// JXA reads window info by iterating the CFArray element-by-element. We avoid
+// ObjC.deepUnwrap (and ObjC.unwrap on the CFDictionary elements) because both
+// are broken on recent macOS for CGWindowListCopyWindowInfo's CFArray result —
+// deepUnwrap returns a non-array ("list.map is not a function") and unwrap loses
+// all keys. Iterating with CFArrayGetCount/CFArrayGetValueAtIndex and reading
+// each key via objectForKey().js works on every supported macOS version and
+// keeps this path 100% dependency-free (osascript is built in).
+const WINDOW_LIST_SCRIPT = `
 ObjC.import('CoreGraphics');
-var list = ObjC.deepUnwrap(
-  $.CGWindowListCopyWindowInfo($.kCGWindowListOptionOnScreenOnly, 0)
-);
-JSON.stringify(list.map(function(w) {
-  return {
-    kCGWindowNumber: w.kCGWindowNumber,
-    kCGWindowOwnerPID: w.kCGWindowOwnerPID || 0,
-    kCGWindowName: w.kCGWindowName || '',
-    kCGWindowOwnerName: w.kCGWindowOwnerName || '',
-    kCGWindowBounds: w.kCGWindowBounds
-  };
-}));`;
+ObjC.import('Foundation');
+function val(dict, key) {
+  var ref = dict.objectForKey(key);
+  return ref ? ref.js : null;
+}
+var cfList = $.CGWindowListCopyWindowInfo($.kCGWindowListOptionOnScreenOnly, 0);
+var count = $.CFArrayGetCount(cfList);
+var out = [];
+for (var i = 0; i < count; i++) {
+  var w = ObjC.castRefToObject($.CFArrayGetValueAtIndex(cfList, i));
+  var bounds = w.objectForKey('kCGWindowBounds');
+  out.push({
+    kCGWindowNumber: val(w, 'kCGWindowNumber') || 0,
+    kCGWindowOwnerPID: val(w, 'kCGWindowOwnerPID') || 0,
+    kCGWindowName: val(w, 'kCGWindowName') || '',
+    kCGWindowOwnerName: val(w, 'kCGWindowOwnerName') || '',
+    kCGWindowBounds: {
+      X: (bounds ? val(bounds, 'X') : 0) || 0,
+      Y: (bounds ? val(bounds, 'Y') : 0) || 0,
+      Width: (bounds ? val(bounds, 'Width') : 0) || 0,
+      Height: (bounds ? val(bounds, 'Height') : 0) || 0,
+    },
+  });
+}
+JSON.stringify(out);`;
 
-  const raw = await runJxa(script);
+async function getWindowList(): Promise<CGWindowInfo[]> {
+  const raw = await runJxa(WINDOW_LIST_SCRIPT);
   const windows = z.array(CGWindowInfoSchema).parse(JSON.parse(raw));
 
   // Detect Screen Recording permission issue: all names empty
