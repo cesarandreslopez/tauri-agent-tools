@@ -24,10 +24,10 @@ npx vitest run tests/commands/screenshot.test.ts
 
 | Location | Purpose |
 |----------|---------|
-| `src/cli.ts` | Entry point — registers all 36 commands via `commander` |
+| `src/cli.ts` | Entry point — registers all 38 commands via `commander` |
 | `src/schemas/` | Zod schemas split by domain: `bridge.ts`, `dom.ts`, `commands.ts`, `platform.ts`, `interact.ts` |
 | `src/types.ts` | Pure interfaces: `WindowInfo`, `PlatformAdapter`, `DisplayServer`, `WindowListEntry` |
-| `src/commands/` | One file per command (`screenshot.ts`, `dom.ts`, `eval.ts`, `wait.ts`, `info.ts`, `listWindows.ts`, `ipcMonitor.ts`, `consoleMonitor.ts`, `rustLogs.ts`, `storage.ts`, `pageState.ts`, `diff.ts`, `mutations.ts`, `snapshot.ts`, `check.ts`, `capture.ts`, `probe.ts`, `invoke.ts`, `storeInspect.ts`, plus v0.7 additions: `appPaths.ts`, `configInspect.ts`, `osLogs.ts`, `sidecarTap.ts`, `sidecarReplay.ts`, `forensics.ts`, `processTree.ts`, `capabilitiesAudit.ts`, `webviewAttach.ts`, `health.ts`, `diagnose.ts`) |
+| `src/commands/` | One file per command (`screenshot.ts`, `dom.ts`, `eval.ts`, `wait.ts`, `info.ts`, `listWindows.ts`, `ipcMonitor.ts`, `consoleMonitor.ts`, `rustLogs.ts`, `storage.ts`, `pageState.ts`, `diff.ts`, `mutations.ts`, `snapshot.ts`, `check.ts`, `capture.ts`, `probe.ts`, `invoke.ts`, `storeInspect.ts`, plus v0.7 additions: `appPaths.ts`, `configInspect.ts`, `osLogs.ts`, `sidecarTap.ts`, `sidecarReplay.ts`, `forensics.ts`, `processTree.ts`, `capabilitiesAudit.ts`, `webviewAttach.ts`, `health.ts`, `diagnose.ts`, plus v0.8 additions: `logs.ts`, `bundle.ts`) |
 | `src/commands/interact/` | Interaction commands: `click.ts`, `type.ts`, `scroll.ts`, `focus.ts`, `navigate.ts`, `select.ts`, `shared.ts` |
 | `src/commands/shared.ts` | `addBridgeOptions()` and `resolveBridge()` — shared bridge option wiring |
 | `src/platform/detect.ts` | `detectDisplayServer()` and `ensureTools()` — runtime platform detection |
@@ -40,13 +40,16 @@ npx vitest run tests/commands/screenshot.test.ts
 | `src/util/image.ts` | `cropImage()`, `resizeImage()`, `computeCropRect()` — ImageMagick operations |
 | `src/util/magick.ts` | `magickCommand()`, `detectMagickVersion()` — ImageMagick v6/v7 version detection and command resolution |
 | `src/util/exec.ts` | `exec()` wrapper around `execFile()`, `validateWindowId()` |
+| `src/util/logMerge.ts` | `parseLogLine()`, `normalizeRustLog()`, `inferCorrelation()` — log parsing/normalization for the `logs` command |
+| `src/util/mergeByTimestamp.ts` | `mergeByTimestamp()` — stable merge of timestamped streams into one UTC-ordered timeline |
+| `src/util/psTree.ts` | `snapshotProcesses()`, `buildDescendantTree()` — OS process-tree walk for `process-tree --deep` / `bundle` |
 | `examples/tauri-bridge/src/dev_bridge.rs` | Reference Rust bridge (~440 lines) — not part of build |
 
 ## Architecture
 
 **Module system:** ESM (`"type": "module"`) with NodeNext resolution. All imports must use `.js` extensions (pointing to compiled output).
 
-**Entry point:** `src/cli.ts` registers 36 commands via `commander`. Each command is in `src/commands/` or `src/commands/interact/`.
+**Entry point:** `src/cli.ts` registers 38 commands via `commander`. Each command is in `src/commands/` or `src/commands/interact/`.
 
 **Command registration pattern:** Each command file exports a `registerXxx(program, ...)` function. Commands that need the platform adapter receive `getAdapter` as a parameter. Commands that need the bridge use `resolveBridge()` from `shared.ts`, which handles auto-discovery or explicit `--port`/`--token`.
 
@@ -82,11 +85,13 @@ npx vitest run tests/commands/screenshot.test.ts
 
 ## Release Process
 
-1. Update version in `package.json`
-2. Update `CHANGELOG.md` with new version section
-3. Commit: `chore: release v<version>`
-4. Tag: `git tag v<version>` on `main`
-5. Publish: `npm publish`
+Publishing is automated by `.github/workflows/release.yml`, which fires on a pushed `v*` tag.
+
+1. Update the version in `package.json`, and keep `package-lock.json` in sync (`npm install --package-lock-only`). The skill `version:` fields in `.agents/skills/*/SKILL.md` should match too.
+2. Update `CHANGELOG.md` with a new `## [<version>] - <date>` section — the release workflow extracts this section verbatim as the GitHub Release body.
+3. Commit on `main` (e.g. `chore: release v<version>`).
+4. `git push origin main`, then `git tag v<version>` and `git push origin v<version>`. The tag must point at a commit that is on `main` (the workflow rejects it otherwise).
+5. `release.yml` validates that the tag matches `package.json`, runs lint + build + tests, then `npm publish` (skips if already published) and creates the GitHub Release. **Do not run `npm publish` by hand.**
 
 ## Module Dependency DAG
 
@@ -115,11 +120,11 @@ Dependencies flow strictly downward. Enforced by `scripts/check-imports.mjs`.
 
 ```bash
 npx tsc --noEmit                              # Type check
-npm test                                      # All tests (623+ tests, 45 files)
+npm test                                      # All tests (749+ tests, 63 files)
 node scripts/check-imports.mjs                # Import DAG linter
 npx madge --circular --extensions ts,tsx src/  # Circular dependency check
 ```
 
 ## Agent Skills
 
-`.agents/skills/` contains two Agent Skills (agentskills.io format) that teach AI agents how to use this tool and set up the Rust bridge. These are shipped in the npm package.
+`.agents/skills/` contains three Agent Skills (agentskills.io format): `tauri-agent-tools` (using the CLI), `tauri-bridge-setup` (adding the Rust bridge), and `tauri-debug-quickstart` (first-30-seconds triage / decision tree). These are shipped in the npm package.

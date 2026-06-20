@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-06-19
+
+Real-world observability hardening. Everything in this release is **additive and backwards-compatible**: no command was removed or renamed, no flag changed meaning, no default output changed, and all schema additions are optional-only. The existing test suite passes unchanged; new behavior is opt-in or only affects paths that previously errored.
+
+### Added
+
+- **`logs`** — merge a Tauri app's scattered logs into one timestamp-ordered stream. Discovers and normalizes the on-disk `tauri-plugin-log` LogDir files (auto-resolved from `tauri.conf.json`, an `--identifier`, or `--log-dir`/`--log-file`) and the live bridge `/logs` ring buffer, then emits NDJSON (`--pretty` for humans). Timezone-less timestamps are normalized to UTC so ordering is host-independent. Filters: `--level`, `--source`, `--filter`; `--correlate` infers `run_id`/`requestId`-style correlation ids. Works with no bridge.
+- **`bundle`** — collect a shareable incident bundle (merged `logs` + deep `process-tree` + `app-paths` + `forensics`, plus an optional UI `capture`) into one directory and a `.tar.gz`. Secrets (`token`/`api_key`/`password`/…) are redacted from text artifacts on write. Best-effort: each phase degrades cleanly.
+- **`process-tree --deep`** — walk the real OS process descendant tree (sidecar children, MCP servers, ML workers — including grandchildren the bridge never registered) via `ps`. Needs no bridge with an explicit `--pid`. New optional JSON fields: `ppid`, `children`, `source`, `descendants`.
+- **`ipc-monitor --slow <ms>` / `--stats`** — flag IPC calls that completed but took ≥ N ms, and print a per-command latency summary (count, max, avg, errors) on exit.
+- **`--strict` flag** (shared) — for the v0.7-endpoint commands, fail with the actionable upgrade error instead of degrading.
+
+### Changed
+
+- **Graceful degradation against older/vendored bridges.** `health`, `capabilities audit`, and `webview attach` now feature-detect via `GET /version` and emit a clear `note:` instead of throwing when the bridge predates v0.7 (default behavior; `--strict` restores the hard error). `process-tree` without `--deep` degrades to the OS walk when the bridge lacks `/process` and the app PID is resolvable, otherwise it still surfaces the actionable upgrade error. This fixes a latent regression where these commands hard-failed against any bridge older than v0.7.0.
+- `BridgeClient` gained a non-throwing `hasEndpoint()` capability check (shares the `/version` cache with `requireEndpoint`).
+- Agent skills (`tauri-agent-tools`, `tauri-debug-quickstart`, `tauri-bridge-setup`) updated to document the new commands and the degrade-by-default behavior; the now-inaccurate "emits an error against older bridges" guidance was corrected.
+
+### Fixed
+
+- **macOS window listing** on recent macOS. JXA's `ObjC.deepUnwrap` on `CGWindowListCopyWindowInfo` began returning a non-array, so `.map` threw `"list.map is not a function"` and broke every macOS window command (`screenshot`, `info`, `list-windows`, `snapshot`, `capture`). The adapter now reads the `CFArray` element-by-element via `CFArrayGetCount` / `CFArrayGetValueAtIndex` / `castRefToObject`, keeping the macOS adapter dependency-free on the built-in `osascript` (no PyObjC / pip). Thanks to **[@ethan-krich](https://github.com/ethan-krich)** ([#8](https://github.com/cesarandreslopez/tauri-agent-tools/pull/8)).
+
 ## [0.7.1] - 2026-05-18
 
 ### Fixed

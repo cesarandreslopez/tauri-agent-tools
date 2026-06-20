@@ -124,7 +124,8 @@ export function registerLogs(program: Command): void {
         if (opts.raw) {
           console.log(JSON.stringify(e));
         } else {
-          const { raw: _raw, ...rest } = e;
+          const rest = { ...e };
+          delete rest.raw;
           console.log(JSON.stringify(rest));
         }
       }

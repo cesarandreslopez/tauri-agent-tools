@@ -1,6 +1,6 @@
 # Command Reference
 
-tauri-agent-tools provides 36 commands for inspecting, interacting with, monitoring, post-mortem analysis, and diagnosing Tauri applications. Inspection commands are read-only. Interaction commands are debug-only (require the dev bridge). Bridge-free diagnostics work on dead apps and release builds.
+tauri-agent-tools provides 38 commands for inspecting, interacting with, monitoring, post-mortem analysis, and diagnosing Tauri applications. Inspection commands are read-only. Interaction commands are debug-only (require the dev bridge). Bridge-free diagnostics work on dead apps and release builds.
 
 ## Command Summary
 
@@ -37,11 +37,13 @@ tauri-agent-tools provides 36 commands for inspecting, interacting with, monitor
 | `sidecar tap` | No | Wrap a sidecar, frame stdout as NDJSON, validate |
 | `sidecar replay` | No | Replay a recorded NDJSON stream |
 | `forensics` | No | Post-crash bundle (works on dead apps) |
+| `logs` | Optional | Merge scattered app logs (on-disk + bridge ring buffer) into one timestamp-ordered stream |
 | `process-tree` | Yes (v0.7+) | Tauri PID + registered sidecars with liveness |
 | `capabilities audit` | Yes (v0.7+) | Live capability audit (wildcards, over-broad scopes) |
 | `webview attach` | Yes (v0.7+) | Webview inspector URL or platform hint |
 | `health` | Yes (v0.7+) | Quick "is this app sick" check (CI-friendly) |
 | `diagnose` | Optional | Best-effort super-command (forensics + bridge data) |
+| `bundle` | Optional | Shareable incident archive: merged logs + process tree + app-paths + forensics (+ optional capture), redacted |
 
 ## Categories
 
@@ -101,6 +103,7 @@ Work without the dev bridge — for release builds, dead apps, and sidecar proce
 - **sidecar tap** — wrap-and-run a sidecar binary, frame its stdout as NDJSON, validate against an optional JSON Schema
 - **sidecar replay** — replay a recorded NDJSON stream to stdout or into a fresh process
 - **forensics** — one-shot bundle for post-crash analysis (composes the above; works on dead apps)
+- **logs** — merge an app's scattered logs (on-disk `tauri-plugin-log` files + the live bridge `/logs` ring buffer) into one timestamp-ordered NDJSON stream, normalized to UTC; filter by `--level`/`--source`/`--filter` and `--correlate` to infer correlation ids (works with no bridge)
 
 ### Bridge-extending diagnostics (new in 0.7, requires bridge v0.7.0+)
 
@@ -114,6 +117,7 @@ Talk to new dev-bridge endpoints. Each feature-detects via `GET /version` and su
 ### Super-command
 
 - **diagnose** — best-effort. Composes `forensics` with live bridge data when reachable; degrades cleanly when not. Master `summary.md` includes a "Next steps" section pointing at the right deeper command.
+- **bundle** — collect a shareable incident archive (merged `logs` + deep `process-tree` + `app-paths` + `forensics`, plus an optional UI `capture`) into one directory and a `.tar.gz`. Secrets (`token`/`api_key`/`password`/…) are redacted from text artifacts on write; each phase degrades cleanly.
 
 ## Common Patterns
 

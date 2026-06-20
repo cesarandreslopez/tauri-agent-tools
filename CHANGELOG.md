@@ -25,6 +25,10 @@ Real-world observability hardening. Everything in this release is **additive and
 - `BridgeClient` gained a non-throwing `hasEndpoint()` capability check (shares the `/version` cache with `requireEndpoint`).
 - Agent skills (`tauri-agent-tools`, `tauri-debug-quickstart`, `tauri-bridge-setup`) updated to document the new commands and the degrade-by-default behavior; the now-inaccurate "emits an error against older bridges" guidance was corrected.
 
+### Fixed
+
+- **macOS window listing** on recent macOS. JXA's `ObjC.deepUnwrap` on `CGWindowListCopyWindowInfo` began returning a non-array, so `.map` threw `"list.map is not a function"` and broke every macOS window command (`screenshot`, `info`, `list-windows`, `snapshot`, `capture`). The adapter now reads the `CFArray` element-by-element via `CFArrayGetCount` / `CFArrayGetValueAtIndex` / `castRefToObject`, keeping the macOS adapter dependency-free on the built-in `osascript` (no PyObjC / pip). Thanks to **[@ethan-krich](https://github.com/ethan-krich)** ([#8](https://github.com/cesarandreslopez/tauri-agent-tools/pull/8)).
+
 ## [0.7.1] - 2026-05-18
 
 ### Fixed

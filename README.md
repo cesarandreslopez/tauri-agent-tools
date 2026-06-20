@@ -4,7 +4,7 @@
 
 **Agent-driven inspection toolkit for Tauri desktop apps**
 
-36 commands to screenshot, inspect, interact with, monitor, post-mortem, audit, and diagnose Tauri apps from the CLI.
+38 commands to screenshot, inspect, interact with, monitor, post-mortem, audit, and diagnose Tauri apps from the CLI.
 
 [![CI](https://github.com/cesarandreslopez/tauri-agent-tools/actions/workflows/ci.yml/badge.svg)](https://github.com/cesarandreslopez/tauri-agent-tools/actions/workflows/ci.yml)
 [![npm version](https://img.shields.io/npm/v/tauri-agent-tools.svg)](https://www.npmjs.com/package/tauri-agent-tools)
@@ -304,8 +304,9 @@ See [`docs/troubleshooting/decision-tree.md`](docs/troubleshooting/decision-tree
 Four commands that talk to new dev-bridge endpoints. Each feature-detects via `GET /version` and surfaces an actionable upgrade error when the bridge is older than v0.7.0.
 
 ```bash
-# Tauri PID + registered sidecars
+# Tauri PID + registered sidecars (--deep walks the full OS descendant tree, no bridge needed)
 tauri-agent-tools process-tree --json
+tauri-agent-tools process-tree --deep --json
 
 # Live capability audit (vs. config inspect which reads JSON files)
 tauri-agent-tools capabilities audit --json
@@ -351,6 +352,25 @@ When to reach for them:
 - **The bridge isn't responding** → start with `forensics`.
 - **A sidecar is the suspect** → run it under `sidecar tap` instead of under Tauri.
 - **You don't have source on hand, just a bundle id** → `app-paths --identifier com.example.app`.
+
+## Unified logs and incident bundles (new in 0.8)
+
+When you need the *whole* picture — every log line in order, or a single shareable archive of an incident:
+
+```bash
+# Merge on-disk tauri-plugin-log files + the live bridge /logs ring buffer into one
+# timestamp-ordered stream (UTC-normalized). NDJSON by default; --pretty for humans.
+tauri-agent-tools logs --config ./src-tauri --pretty
+tauri-agent-tools logs --level warn --correlate          # filter + infer run_id/requestId ids
+tauri-agent-tools logs --no-bridge                       # on-disk files only (no running app)
+
+# Collect a shareable incident bundle: merged logs + deep process tree + app-paths +
+# forensics (+ optional UI capture) → a redacted directory and a .tar.gz.
+tauri-agent-tools bundle --config ./src-tauri -o ./incident --since 10m
+tauri-agent-tools bundle --with-capture                  # also snapshot the UI (needs live bridge)
+```
+
+`logs` works with no bridge (it reads the on-disk log files); a running bridge just adds the live ring buffer. `bundle` redacts secrets (`token`/`api_key`/`password`/…) from text artifacts on write and degrades cleanly when a phase can't run.
 
 ## How It Works
 
@@ -417,8 +437,9 @@ This package ships [Agent Skills](https://agentskills.io) so AI coding agents ca
 
 | Skill | Description |
 |-------|-------------|
-| `tauri-agent-tools` | Using all 36 CLI commands to inspect and interact with Tauri apps |
+| `tauri-agent-tools` | Using all 38 CLI commands to inspect and interact with Tauri apps |
 | `tauri-bridge-setup` | Adding the Rust dev bridge to a Tauri project |
+| `tauri-debug-quickstart` | First-30-seconds triage — pick the right command for the symptom |
 
 <details>
 <summary><strong>Claude Code</strong></summary>
@@ -471,7 +492,7 @@ Full documentation is available at the [docs site](https://cesarandreslopez.gith
 - [Installation](https://cesarandreslopez.github.io/tauri-agent-tools/getting-started/installation/) — system requirements and setup
 - [Quick Start](https://cesarandreslopez.github.io/tauri-agent-tools/getting-started/quick-start/) — get running in 5 minutes
 - [Bridge Setup](https://cesarandreslopez.github.io/tauri-agent-tools/getting-started/bridge-setup/) — integrate the Rust bridge into your Tauri app
-- [Command Reference](https://cesarandreslopez.github.io/tauri-agent-tools/commands/) — all 36 commands with examples
+- [Command Reference](https://cesarandreslopez.github.io/tauri-agent-tools/commands/) — all 38 commands with examples
 - [Platform Support](https://cesarandreslopez.github.io/tauri-agent-tools/platform-support/) — X11, Wayland, macOS details
 - [Architecture](https://cesarandreslopez.github.io/tauri-agent-tools/architecture/overview/) — how it works under the hood
 

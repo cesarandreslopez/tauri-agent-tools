@@ -208,7 +208,7 @@ function runToDir(phase: string, args: string[]): Promise<PhaseOutcome> {
 
 const REDACT_PATTERNS: Array<[RegExp, string]> = [
   [/("token"\s*:\s*")[^"]+(")/gi, '$1***$2'],
-  [/\btoken=([\w.\-]+)/gi, 'token=***'],
+  [/\btoken=([\w.-]+)/gi, 'token=***'],
   [/("(?:authorization|api[_-]?key|secret|password)"\s*:\s*")[^"]+(")/gi, '$1***$2'],
 ];
 
