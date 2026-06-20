@@ -41,6 +41,8 @@ import { registerOsLogs } from './commands/osLogs.js';
 import { registerSidecarTap } from './commands/sidecarTap.js';
 import { registerSidecarReplay } from './commands/sidecarReplay.js';
 import { registerForensics } from './commands/forensics.js';
+import { registerLogs } from './commands/logs.js';
+import { registerBundle } from './commands/bundle.js';
 import { registerProcessTree } from './commands/processTree.js';
 import { registerCapabilitiesAudit } from './commands/capabilitiesAudit.js';
 import { registerWebviewAttach } from './commands/webviewAttach.js';
@@ -109,6 +111,7 @@ registerOsLogs(program);
 registerSidecarTap(program);
 registerSidecarReplay(program);
 registerForensics(program);
+registerLogs(program);
 
 // ── Bridge-extending diagnostics (Tier 2 — requires bridge v0.7.0+) ──────────
 registerProcessTree(program);
@@ -116,8 +119,9 @@ registerCapabilitiesAudit(program);
 registerWebviewAttach(program);
 registerHealth(program);
 
-// ── Tier 3: super-command (composes Tier 1 + Tier 2) ─────────────────────────
+// ── Tier 3: super-commands (compose Tier 1 + Tier 2) ─────────────────────────
 registerDiagnose(program);
+registerBundle(program);
 
 program.parseAsync().catch((err: unknown) => {
   console.error(err instanceof Error ? err.message : String(err));

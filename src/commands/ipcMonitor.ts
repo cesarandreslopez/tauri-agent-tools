@@ -69,11 +69,33 @@ function compileWildcardFilter(filter: string): RegExp | null {
   return new RegExp(pattern);
 }
 
-function formatEntry(entry: IpcEntry): string {
+function formatEntry(entry: IpcEntry, slow = false): string {
   const time = new Date(entry.timestamp).toISOString().slice(11, 23);
   const dur = entry.duration !== undefined ? ` ${entry.duration}ms` : '';
   const status = entry.error ? `ERR: ${entry.error}` : 'OK';
-  return `[${time}]${dur} ${entry.command} ${status}`;
+  const slowMark = slow ? ' SLOW' : '';
+  return `[${time}]${dur} ${entry.command} ${status}${slowMark}`;
+}
+
+interface CommandStat {
+  count: number;
+  errors: number;
+  totalMs: number;
+  maxMs: number;
+}
+
+function renderStats(stats: Map<string, CommandStat>): void {
+  if (stats.size === 0) {
+    console.error('# no IPC calls observed');
+    return;
+  }
+  const rows = [...stats.entries()].sort((a, b) => b[1].maxMs - a[1].maxMs);
+  console.error('# IPC summary (by slowest):');
+  for (const [command, s] of rows) {
+    const avg = s.count > 0 ? Math.round(s.totalMs / s.count) : 0;
+    const errPart = s.errors > 0 ? `  errors=${s.errors}` : '';
+    console.error(`#   ${command.padEnd(28)} n=${s.count}  max=${s.maxMs}ms  avg=${avg}ms${errPart}`);
+  }
 }
 
 async function cleanup(bridge: BridgeClient): Promise<void> {
@@ -90,6 +112,8 @@ export function registerIpcMonitor(program: Command): void {
     .option('--filter <command>', 'Only show specific IPC commands (supports * wildcards)')
     .option('--interval <ms>', 'Poll interval in milliseconds', parseInt, 500)
     .option('--duration <ms>', 'Auto-stop after N milliseconds', parseInt)
+    .option('--slow <ms>', 'Flag IPC calls that completed but took ≥ N ms', parseInt)
+    .option('--stats', 'Print a per-command latency summary on exit')
     .option('--json', 'Output one JSON object per line');
 
   addBridgeOptions(cmd);
@@ -98,11 +122,14 @@ export function registerIpcMonitor(program: Command): void {
     filter?: string;
     interval: number;
     duration?: number;
+    slow?: number;
+    stats?: boolean;
     json?: boolean;
     port?: number;
     token?: string;
   }) => {
     const filterRegex = opts.filter ? compileWildcardFilter(opts.filter) : null;
+    const stats = new Map<string, CommandStat>();
 
     const bridge = await resolveBridge(opts);
 
@@ -150,10 +177,26 @@ export function registerIpcMonitor(program: Command): void {
             }
           }
 
+          if (opts.stats) {
+            const s = stats.get(entry.command) ?? { count: 0, errors: 0, totalMs: 0, maxMs: 0 };
+            s.count += 1;
+            if (entry.error) s.errors += 1;
+            if (entry.duration !== undefined) {
+              s.totalMs += entry.duration;
+              if (entry.duration > s.maxMs) s.maxMs = entry.duration;
+            }
+            stats.set(entry.command, s);
+          }
+
+          const isSlow =
+            opts.slow !== undefined &&
+            entry.duration !== undefined &&
+            entry.duration >= opts.slow;
+
           if (opts.json) {
-            console.log(JSON.stringify(entry));
+            console.log(JSON.stringify(isSlow ? { ...entry, slow: true } : entry));
           } else {
-            console.log(formatEntry(entry));
+            console.log(formatEntry(entry, isSlow));
           }
         }
       }
@@ -162,6 +205,7 @@ export function registerIpcMonitor(program: Command): void {
       process.off('SIGINT', onSignal);
       process.off('SIGTERM', onSignal);
       await cleanup(bridge);
+      if (opts.stats) renderStats(stats);
     }
   });
 

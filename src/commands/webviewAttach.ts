@@ -1,6 +1,11 @@
 import { Command } from 'commander';
 import { exec } from '../util/exec.js';
-import { addBridgeOptions, resolveBridge } from './shared.js';
+import {
+  addBridgeOptions,
+  resolveBridge,
+  endpointAvailable,
+  endpointUnavailableNote,
+} from './shared.js';
 import type { BridgeOpts } from './shared.js';
 import type { DevtoolsResponse } from '../schemas/bridge.js';
 
@@ -24,6 +29,22 @@ export function registerWebviewAttach(program: Command): void {
 
   sub.action(async (opts: WebviewAttachOpts) => {
     const bridge = await resolveBridge(opts);
+
+    // Graceful degradation: older bridges (pre-v0.7) have no /devtools endpoint.
+    if (!(await endpointAvailable(bridge, '/devtools', opts))) {
+      const note = endpointUnavailableNote('/devtools', (await bridge.version())?.version);
+      if (opts.json) {
+        console.log(JSON.stringify({ endpoint: '/devtools', available: false, note }, null, 2));
+      } else if (opts.printUrl) {
+        // Keep --print-url contract: emit an empty line when no URL is available.
+        console.log('');
+        console.error(`note: ${note}`);
+      } else {
+        console.error(`note: ${note}`);
+      }
+      return;
+    }
+
     const dt = await bridge.devtools();
 
     if (opts.json) {

@@ -1,7 +1,7 @@
 ---
 name: tauri-bridge-setup
 description: How to add the tauri-agent-tools Rust dev bridge to a Tauri application
-version: 0.7.1
+version: 0.8.0
 tags: [tauri, rust, bridge, setup, integration, multi-window, process-tree, capabilities, devtools, health]
 ---
 
@@ -11,9 +11,9 @@ Add the dev bridge to a Tauri app so `tauri-agent-tools` can inspect DOM, evalua
 
 The bridge runs **only in debug builds** and is stripped from release builds automatically.
 
-## Re-copying for v0.7
+## Re-copying for v0.7 (optional enrichment — not required)
 
-> **Upgrading from v0.6:** The bridge surface grew with four new endpoints (`/process`, `/capabilities`, `/devtools`, `/health`) and `start_bridge` now returns a third tuple element (the sidecar registry). **Re-copy `dev_bridge.rs` from the latest `examples/tauri-bridge/src/dev_bridge.rs`** and adjust your `main.rs` to destructure the new return shape (see Step 3 below). The CLI's new commands (`process-tree`, `capabilities audit`, `webview attach`, `health`) feature-detect via `GET /version` and emit a clear "requires v0.7.0+" error when the bridge is older — so partial upgrades fail loudly rather than silently.
+> **Upgrading from v0.6:** The bridge surface grew with four new endpoints (`/process`, `/capabilities`, `/devtools`, `/health`) and `start_bridge` now returns a third tuple element (the sidecar registry). These are **optional enrichment**: as of CLI v0.8 the commands that use them (`process-tree`, `capabilities audit`, `webview attach`, `health`) feature-detect via `GET /version` and **degrade gracefully** against an older/vendored bridge — they emit a clear `note:` (and fall back to an OS/eval path where possible) instead of failing. So you are **not forced to re-sync** `dev_bridge.rs` just to keep using the CLI. To unlock the richer structured output, **re-copy `dev_bridge.rs` from the latest `examples/tauri-bridge/src/dev_bridge.rs`** and adjust your `main.rs` to destructure the new return shape (Step 3). Pass `--strict` to any of those commands to turn a missing endpoint back into a hard error.
 
 ## Bridge Endpoints
 
@@ -183,6 +183,8 @@ dev_bridge::register_sidecar(
 ```
 
 Then monitor with: `tauri-agent-tools rust-logs --source sidecar --duration 10000`, view the tree with `tauri-agent-tools process-tree`, and check liveness with `tauri-agent-tools health`.
+
+> Registration is only needed for the bridge's **named** `/process` view (and `health` liveness). If you just want to *see* the process tree — including children and grandchildren you spawned yourself — `tauri-agent-tools process-tree --deep` reads the live OS process table and needs no registration (or even no bridge, with `--pid`).
 
 ## Troubleshooting
 

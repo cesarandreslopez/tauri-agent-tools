@@ -1,8 +1,8 @@
 ---
 name: tauri-debug-quickstart
 description: First-30-seconds triage for a broken Tauri desktop app. Pick the right command for the symptom you're seeing, with one-line escalations to deeper skills.
-version: 0.7.1
-tags: [tauri, debugging, triage, quickstart, decision-tree, forensics, diagnose]
+version: 0.8.0
+tags: [tauri, debugging, triage, quickstart, decision-tree, logs, process-tree, bundle, forensics, diagnose]
 ---
 
 # Tauri Debug Quickstart
@@ -35,13 +35,16 @@ Pick the row that matches what's broken. Each command works without the bridge u
 | Don't know what's wrong | `tauri-agent-tools diagnose -o ./diag` | Everything-bundle; graceful on dead apps |
 | App crashed at startup | `tauri-agent-tools forensics --config ./src-tauri -o ./forensics` | Reads app log + DiagnosticReports without needing a live process |
 | App is running but bridge isn't responding | `tauri-agent-tools probe` | Detects whether the bridge process is up and shows token-file state |
-| App is running, bridge is up, but webview looks wrong | `tauri-agent-tools health --json` *(needs bridge v0.7+)* | Returns webview_ready + sidecar liveness in one call |
+| App is running, bridge is up, but webview looks wrong | `tauri-agent-tools health --json` | Returns webview_ready + sidecar liveness (richer on bridge v0.7+; degrades to a liveness ping otherwise) |
+| Evidence is scattered across webview/Rust/sidecar logs | `tauri-agent-tools logs --config ./src-tauri --pretty` | Merges on-disk log files + the bridge ring buffer into one timestamp-ordered timeline |
+| What did the sidecar actually spawn (MCP servers, workers)? | `tauri-agent-tools process-tree --deep --json` | Walks the real OS descendant tree, including unregistered grandchildren — no bridge needed |
+| Need one shareable archive of everything for a bug report | `tauri-agent-tools bundle --config ./src-tauri -o ./triage` | Logs + deep process tree + app-paths + forensics → redacted dir + `.tar.gz` |
 | A sidecar process is the suspect | `tauri-agent-tools sidecar tap --schema ./schema.json -- <cmd>` | Wrap-and-run the sidecar standalone; frame NDJSON; validate envelopes |
 | Need to know exactly which files the app touches | `tauri-agent-tools app-paths --config ./src-tauri --exists` | Resolves Tauri 2's per-platform `app_data_dir`/`app_log_dir`/etc. + checks existence |
 | Need to audit Tauri capabilities for over-broad permissions | `tauri-agent-tools config inspect --config ./src-tauri` (static) **or** `tauri-agent-tools capabilities audit` (live, needs bridge v0.7+) | Flags `*`, `fs:allow-all`, `shell:allow-spawn`, etc. |
 | OS-level error visible in Console.app or journalctl | `tauri-agent-tools os-logs --identifier com.example.app --level error --duration 30000` | Filters platform log stream to the Tauri bundle id |
 | Inspector / webview attach | `tauri-agent-tools webview attach` *(needs bridge v0.7+)* | Returns inspector URL or platform-specific hint |
-| What sidecars did this app spawn? | `tauri-agent-tools process-tree --json` *(needs bridge v0.7+)* | Tauri PID + registered sidecars with alive/dead per-PID |
+| What sidecars did this app spawn? | `tauri-agent-tools process-tree --json` (or `--deep`) | Bridge /process lists registered sidecars (v0.7+); `--deep` walks the OS tree with no bridge |
 
 ## Decision tree
 
@@ -66,8 +69,8 @@ When in doubt, escalate to `diagnose` — its `summary.md` will tell you which d
 
 - All commands accept `--json` for machine-readable output.
 - Bundle commands (`forensics`, `diagnose`) write a `summary.md` agents can open directly and a `summary.json` agents can parse.
-- Streaming commands (`os-logs`, `rust-logs`, `sidecar tap`) emit one NDJSON envelope per line on stdout.
-- Bridge v0.7+ commands feature-detect via `GET /version` and emit a clear "re-copy dev_bridge.rs" error against older bridges.
+- Streaming commands (`os-logs`, `rust-logs`, `sidecar tap`) and `logs` emit one NDJSON envelope per line on stdout.
+- Bridge v0.7+ commands feature-detect via `GET /version` and **degrade gracefully** (a clear `note:`, plus an OS/eval fallback where possible) against older bridges. Pass `--strict` to turn a missing endpoint into a hard error instead.
 
 ## When this skill is wrong
 

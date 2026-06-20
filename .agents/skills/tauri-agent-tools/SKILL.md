@@ -1,8 +1,8 @@
 ---
 name: tauri-agent-tools
-description: CLI for inspecting and interacting with Tauri desktop apps — DOM queries, screenshots, interaction (click/type/scroll), IPC monitoring, store inspection, structured assertions, plus bridge-free diagnostics (OS logs, app paths, sidecar NDJSON tap/replay, forensic bundles) and the `diagnose` super-command for one-shot triage
-version: 0.7.1
-tags: [tauri, desktop, debugging, screenshot, dom, inspection, diff, mutations, snapshot, interaction, click, type, scroll, invoke, probe, capture, check, store-inspect, forensics, os-logs, app-paths, sidecar, config-inspect, diagnose]
+description: CLI for inspecting and interacting with Tauri desktop apps — DOM queries, screenshots, interaction (click/type/scroll), IPC monitoring, store inspection, structured assertions, plus bridge-free diagnostics (unified cross-layer logs, deep OS process trees, OS logs, app paths, sidecar NDJSON tap/replay, forensic bundles) and the `diagnose`/`bundle` super-commands for one-shot triage. Works against older/vendored bridges by degrading gracefully.
+version: 0.8.0
+tags: [tauri, desktop, debugging, screenshot, dom, inspection, diff, mutations, snapshot, interaction, click, type, scroll, invoke, probe, capture, check, store-inspect, logs, bundle, process-tree, forensics, os-logs, app-paths, sidecar, config-inspect, diagnose]
 ---
 
 # tauri-agent-tools
@@ -33,13 +33,16 @@ npm install -g tauri-agent-tools
 Some commands require the Rust dev bridge running inside the Tauri app. Others work standalone.
 
 **Bridge required** (needs running Tauri app with bridge):
-`screenshot --selector`, `dom`, `eval`, `wait --selector`, `wait --eval`, `ipc-monitor`, `console-monitor`, `rust-logs`, `storage`, `page-state`, `mutations`, `snapshot`, `click`, `type`, `scroll`, `focus`, `navigate`, `select`, `invoke`, `capture`, `check`, `store-inspect`, `process-tree` *(v0.7+)*, `capabilities audit` *(v0.7+)*, `webview attach` *(v0.7+)*, `health` *(v0.7+)*
+`screenshot --selector`, `dom`, `eval`, `wait --selector`, `wait --eval`, `ipc-monitor`, `console-monitor`, `rust-logs`, `storage`, `page-state`, `mutations`, `snapshot`, `click`, `type`, `scroll`, `focus`, `navigate`, `select`, `invoke`, `capture`, `check`, `store-inspect`
+
+**Bridge-enriched, but degrade gracefully** (use a v0.7+ bridge for full output; otherwise emit a clear note instead of failing — pass `--strict` to fail loudly):
+`capabilities audit`, `webview attach`, `health` *(richer with bridge v0.7+)*
 
 **Standalone** (no bridge needed):
-`screenshot --title` (full window only), `wait --title`, `list-windows`, `info`, `diff`, `app-paths`, `config inspect`, `os-logs`, `sidecar tap`, `sidecar replay`, `forensics`
+`screenshot --title` (full window only), `wait --title`, `list-windows`, `info`, `diff`, `logs`, `app-paths`, `config inspect`, `os-logs`, `sidecar tap`, `sidecar replay`, `forensics`
 
-**Optional bridge:**
-`probe` (works standalone to discover bridges, richer output with bridge)
+**Optional bridge** (work standalone, richer with a bridge):
+`probe`, `process-tree` (use `--deep` for a bridge-free OS walk), `logs` (merges on-disk files alone, or also drains the bridge ring buffer), `bundle`, `diagnose`
 
 The bridge auto-discovers via token files in `/tmp/tauri-dev-bridge-*.token`. No manual port/token configuration needed.
 
@@ -144,13 +147,37 @@ tauri-agent-tools rust-logs --source sidecar --duration 10000 --json
 tauri-agent-tools rust-logs --source sidecar:ffmpeg --duration 5000 --json
 ```
 
-### Bridge-extended diagnostics (process tree, capabilities, devtools, health — requires bridge v0.7.0+)
+### Merge scattered logs into one timeline (`logs`)
 
-Four commands that talk to new endpoints on the dev bridge. Each calls `GET /version` first to feature-detect and emits a clear "requires bridge v0.7.0+ — re-copy dev_bridge.rs" error against older bridges.
+A real app spreads logs across the bridge ring buffer, the webview console, an on-disk `tauri-plugin-log` file, and sidecar output. `logs` discovers what's available, normalizes every source, and emits one **timestamp-ordered** stream (NDJSON by default; `--pretty` for humans). Works with no bridge.
 
 ```bash
-# Tauri PID + registered sidecars (uses /process)
+# Merge the on-disk log dir (auto-resolved from tauri.conf.json) + the bridge ring buffer
+tauri-agent-tools logs --config ./src-tauri --pretty
+
+# No source tree handy? Locate the OS log dir from a bundle id; skip the bridge
+tauri-agent-tools logs --identifier com.example.app --no-bridge
+
+# Point at explicit files / a custom dir; filter + infer correlation ids (run_id, requestId…)
+tauri-agent-tools logs --log-dir ~/Library/Logs/com.example.app --level warn --correlate
+tauri-agent-tools logs --log-file /path/a.log --log-file /path/b.log --filter "block_id=42"
+```
+
+Each entry is `{ts, level, source, subsystem, message, origin}` (+ `correlation` with `--correlate`). `source` is `rust` / `sidecar:<name>` (bridge) or `file:<basename>` (disk). Timezone-less timestamps are read as UTC so ordering is host-independent.
+
+### Bridge-extended diagnostics (process tree, capabilities, devtools, health)
+
+These commands prefer richer endpoints on a v0.7+ bridge but **degrade gracefully** against older/vendored bridges: each calls `GET /version` first to feature-detect, and when an endpoint is missing it emits a clear `note:` (and falls back where it can) instead of failing. Pass `--strict` to make a missing endpoint a hard error instead.
+
+```bash
+# Tauri PID + registered sidecars (uses /process on a v0.7+ bridge).
+# On older bridges it degrades to an OS walk when the app PID is resolvable.
 tauri-agent-tools process-tree --json
+
+# Walk the REAL OS descendant tree — sidecar children, MCP servers, ML workers —
+# without the bridge at all (great for unregistered grandchildren):
+tauri-agent-tools process-tree --deep --json
+tauri-agent-tools process-tree --deep --pid 12345   # no bridge needed with an explicit PID
 
 # Devtron-style live capability audit (uses /capabilities)
 tauri-agent-tools capabilities audit --json
@@ -166,7 +193,7 @@ tauri-agent-tools webview attach --open       # launch in default browser
 tauri-agent-tools health --json
 ```
 
-Sidecars only appear in `process-tree` / `health` if integrators register them — either by passing `Some(&registry)` to `dev_bridge::spawn_sidecar_monitored`, or by calling `dev_bridge::register_sidecar` after their own spawn.
+Sidecars only appear in the bridge's `/process` view (`process-tree` without `--deep`, and `health`) if integrators register them — by passing `Some(&registry)` to `dev_bridge::spawn_sidecar_monitored` or calling `dev_bridge::register_sidecar`. **`process-tree --deep` needs none of that** — it reads the live OS process table, so it surfaces unregistered children and grandchildren regardless.
 
 ### Bridge-free diagnostics (post-mortem & sidecar workflows)
 
@@ -196,6 +223,13 @@ tauri-agent-tools sidecar replay /tmp/run.ndjson --to-exec node my-sidecar.js --
 tauri-agent-tools forensics --config ./src-tauri -o ./forensics-out
 # → ./forensics-out/{summary.md,summary.json,project.json,app-log-tail.txt,live-os-log.ndjson}
 # summary.md includes detected panic markers + suggested next commands.
+
+# One-shot SHAREABLE incident bundle: merges logs + deep process tree + app-paths +
+# forensics (+ optional UI capture) into one redacted directory and a .tar.gz.
+tauri-agent-tools bundle --config ./src-tauri -o ./triage
+# → ./triage/{logs.ndjson,process-tree.json,app-paths.json,forensics/,summary.md} + ./triage.tar.gz
+tauri-agent-tools bundle --config ./src-tauri --with-capture -o ./triage   # also screenshot + DOM (needs bridge)
+# Secrets (token/api_key/password/…) are redacted from text artifacts on write.
 ```
 
 ### Watch DOM mutations
@@ -296,7 +330,7 @@ tauri-agent-tools eval "document.title" --window-label overlay --json
 | `wait` | `--selector <css>`, `--eval <js>`, `--title <regex>`, `--timeout <ms>` | selector/eval: yes | Wait for a condition |
 | `list-windows` | `--tauri`, `--json` | no | List visible windows |
 | `info` | `--title <regex>`, `--json` | no | Window geometry and display info |
-| `ipc-monitor` | `--filter <cmd>`, `--duration <ms>`, `--json` | yes | Monitor Tauri IPC calls |
+| `ipc-monitor` | `--filter <cmd>`, `--duration <ms>`, `--slow <ms>`, `--stats`, `--json` | yes | Monitor Tauri IPC calls; flag slow calls + per-command latency summary |
 | `console-monitor` | `--level <lvl>`, `--filter <regex>`, `--duration <ms>`, `--json` | yes | Monitor console output |
 | `rust-logs` | `--level <lvl>`, `--target <regex>`, `--source <src>`, `--duration <ms>`, `--json` | yes | Monitor Rust logs and sidecar output |
 | `storage` | `--type <local\|session\|cookies\|all>`, `--key <name>`, `--json` | yes | Inspect browser storage |
@@ -321,11 +355,13 @@ tauri-agent-tools eval "document.title" --window-label overlay --json
 | `sidecar tap` | `-- <cmd...>`, `--schema <path>`, `--record <path>`, `--raw`, `--json` | no | Wrap-and-run a sidecar, frame NDJSON, validate envelopes |
 | `sidecar replay` | `<file>`, `--to-exec <cmd>`, `--rate <lps>`, `--loop` | no | Replay a recorded NDJSON sidecar stream |
 | `forensics` | `--config <path>`, `--identifier <id>`, `-o <dir>`, `--since <dur>`, `--json` | no | One-shot forensic bundle (works on dead apps) |
-| `process-tree` | `--json` | yes (v0.7+) | Tauri PID + registered sidecars with alive/DEAD status |
+| `logs` | `--config <path>`, `--identifier <id>`, `--log-dir <path>`, `--log-file <path>`, `--level <lvl>`, `--source <re>`, `--filter <re>`, `--correlate`, `--no-bridge`, `--pretty` | optional | Merge on-disk log files + bridge ring buffer into one timestamp-ordered stream |
+| `process-tree` | `--deep`, `--pid <n>`, `--json` | optional | Tauri PID + sidecars (bridge /process); `--deep` walks the full OS descendant tree without the bridge |
 | `capabilities audit` | `--json` | yes (v0.7+) | Live Devtron-style audit of declared Tauri capabilities |
 | `webview attach` | `--print-url`, `--open`, `--json` | yes (v0.7+) | Print webview inspector URL or platform hint |
 | `health` | `--json` | yes (v0.7+) | Uptime + webview/sidecar liveness (exit non-zero if unhealthy) |
 | `diagnose` | `--config <path>`, `-o <dir>`, `--since <dur>`, `--no-bridge`, `--json` | optional | Best-effort super-bundle (forensics + live bridge enrichment) |
+| `bundle` | `--config <path>`, `-o <dir>`, `--with-capture`, `--no-archive`, `--json` | optional | Shareable incident bundle: logs + deep process tree + app-paths + forensics → redacted dir + .tar.gz |
 
 ## Targeting Flags
 
@@ -333,6 +369,7 @@ All bridge-dependent commands support these flags:
 - `--port <n>` / `--token <s>` — explicit bridge config (skips auto-discovery)
 - `--pid <n>` — target a specific app by PID
 - `--window-label <label>` — target a specific webview window (default: main)
+- `--strict` — for v0.7-endpoint commands, fail with an upgrade error instead of degrading when the bridge is too old
 
 ## Important Notes
 

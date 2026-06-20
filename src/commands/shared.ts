@@ -12,6 +12,12 @@ export interface BridgeOpts {
   token?: string;
   pid?: number;
   windowLabel?: string;
+  /**
+   * When true, commands that depend on a v0.7+ bridge endpoint throw the
+   * actionable "requires bridge vX" error instead of degrading. Default
+   * (false) = degrade gracefully. See {@link endpointAvailable}.
+   */
+  strict?: boolean;
 }
 
 /**
@@ -35,7 +41,65 @@ export function addBridgeOptions(cmd: Command): Command {
     .option('--port <number>', 'Bridge port (auto-discover if omitted)', parseInt)
     .option('--token <string>', 'Bridge token (auto-discover if omitted)')
     .option('--pid <number>', 'Target app PID (auto-discover if omitted)', parseInt)
-    .option('--window-label <label>', 'Target window label (default: main)');
+    .option('--window-label <label>', 'Target window label (default: main)')
+    .option(
+      '--strict',
+      'Fail (instead of degrading) when the bridge lacks a required v0.7+ endpoint',
+    );
+}
+
+/**
+ * Non-throwing gate for a v0.7+ bridge endpoint. Returns true when the caller
+ * should proceed to use the endpoint, false when it should degrade.
+ *
+ * - In `--strict` mode it always returns true, so the subsequent throwing call
+ *   (e.g. `bridge.process()`) surfaces the actionable "requires bridge vX" error
+ *   — preserving the pre-v0.8 behavior for callers that opt in.
+ * - Otherwise it feature-detects via `/version` (cached) and returns whether the
+ *   endpoint is advertised, letting the command fall back instead of throwing.
+ */
+export async function endpointAvailable(
+  bridge: BridgeClient,
+  path: string,
+  opts: { strict?: boolean },
+): Promise<boolean> {
+  if (opts.strict) return true;
+  return bridge.hasEndpoint(path);
+}
+
+/**
+ * Standard one-line note explaining that a v0.7+ endpoint is absent on the
+ * running bridge, with the same remediation hint `requireEndpoint` uses.
+ */
+export function endpointUnavailableNote(path: string, version?: string | null): string {
+  const v = version ? ` (this app reports bridge v${version})` : '';
+  return (
+    `${path} is not available on the running bridge${v}. ` +
+    `Re-copy examples/tauri-bridge/src/dev_bridge.rs and rebuild to enable it — ` +
+    `or pass --strict to fail instead of degrading.`
+  );
+}
+
+/**
+ * Resolve a bridge config WITHOUT throwing — returns null when no bridge is
+ * reachable. Use this in best-effort, bridge-optional commands (`logs`,
+ * `bundle`) that should still produce output when no app is running.
+ */
+export async function tryResolveBridgeConfig(opts: BridgeOpts): Promise<BridgeConfig | null> {
+  try {
+    if (opts.port && opts.token) return { port: opts.port, token: opts.token };
+    if (opts.pid !== undefined) {
+      const bridges = await discoverBridgesByPid();
+      const match = bridges.get(opts.pid);
+      if (!match) return null;
+      return { port: opts.port ?? match.port, token: opts.token ?? match.token };
+    }
+    const discovered = await discoverBridge();
+    if (!discovered) return null;
+    return { port: opts.port ?? discovered.port, token: opts.token ?? discovered.token };
+  } catch {
+    return null;
+  }
 }
 
 export async function resolveBridge(opts: BridgeOpts): Promise<BridgeClient> {

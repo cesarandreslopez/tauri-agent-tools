@@ -1,5 +1,10 @@
 import { Command } from 'commander';
-import { addBridgeOptions, resolveBridge } from './shared.js';
+import {
+  addBridgeOptions,
+  resolveBridge,
+  endpointAvailable,
+  endpointUnavailableNote,
+} from './shared.js';
 import type { BridgeOpts } from './shared.js';
 import type { HealthResponse } from '../schemas/bridge.js';
 
@@ -12,6 +17,27 @@ export function registerHealth(program: Command): void {
 
   cmd.action(async (opts: BridgeOpts & { json?: boolean }) => {
     const bridge = await resolveBridge(opts);
+
+    // Graceful degradation: older bridges (pre-v0.7) have no /health endpoint.
+    // Fall back to a basic liveness ping instead of throwing.
+    if (!(await endpointAvailable(bridge, '/health', opts))) {
+      const note = endpointUnavailableNote('/health', (await bridge.version())?.version);
+      const alive = await bridge.ping();
+      if (opts.json) {
+        console.log(
+          JSON.stringify({ endpoint: '/health', available: false, note, bridge_alive: alive }, null, 2),
+        );
+      } else {
+        console.error(`note: ${note}`);
+        console.log(`Bridge alive:   ${alive ? 'yes' : 'NO'}`);
+        console.log(`Webview ready:  (unknown — needs bridge v0.7.0+)`);
+        console.log(`Sidecars alive: (unknown — needs bridge v0.7.0+)`);
+      }
+      // A missing endpoint is not itself "unhealthy" — keep exit code 0 so it
+      // doesn't break CI gates that tolerate older bridges.
+      return;
+    }
+
     const h = await bridge.health();
     if (opts.json) {
       console.log(JSON.stringify(h, null, 2));

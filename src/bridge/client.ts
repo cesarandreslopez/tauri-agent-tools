@@ -262,6 +262,26 @@ export class BridgeClient {
     );
   }
 
+  /**
+   * Non-throwing capability check: resolves true iff the running bridge
+   * advertises `path` in its `/version` endpoint list. Shares the `/version`
+   * cache with {@link requireEndpoint}, so repeated checks cost one roundtrip.
+   * Resolves false when the bridge is unreachable or too old to report
+   * `/version` — letting callers degrade gracefully instead of throwing.
+   */
+  async hasEndpoint(path: string): Promise<boolean> {
+    if (this.versionUnreachable) return false;
+    if (this.versionCache === null) {
+      const v = await this.version();
+      if (v === null) {
+        this.versionUnreachable = true;
+        return false;
+      }
+      this.versionCache = v;
+    }
+    return this.versionCache.endpoints.includes(path);
+  }
+
   async process(): Promise<ProcessResponse> {
     await this.requireEndpoint('/process');
     const res = await this.postAuthed('/process');

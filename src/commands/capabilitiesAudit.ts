@@ -1,5 +1,10 @@
 import { Command } from 'commander';
-import { addBridgeOptions, resolveBridge } from './shared.js';
+import {
+  addBridgeOptions,
+  resolveBridge,
+  endpointAvailable,
+  endpointUnavailableNote,
+} from './shared.js';
 import type { BridgeOpts } from './shared.js';
 import type { CapabilitiesResponse, LiveCapabilityEntry } from '../schemas/bridge.js';
 
@@ -35,6 +40,21 @@ export function registerCapabilitiesAudit(program: Command): void {
 
   sub.action(async (opts: BridgeOpts & { json?: boolean }) => {
     const bridge = await resolveBridge(opts);
+
+    // Graceful degradation: older bridges (pre-v0.7) have no /capabilities
+    // endpoint. Point the user at the bridge-free static auditor instead.
+    if (!(await endpointAvailable(bridge, '/capabilities', opts))) {
+      const note =
+        endpointUnavailableNote('/capabilities', (await bridge.version())?.version) +
+        ' For a bridge-free audit, run `tauri-agent-tools config inspect`.';
+      if (opts.json) {
+        console.log(JSON.stringify({ endpoint: '/capabilities', available: false, note }, null, 2));
+      } else {
+        console.error(`note: ${note}`);
+      }
+      return;
+    }
+
     const caps = await bridge.capabilities();
     const findings = audit(caps);
     const out: AuditOutput = {
