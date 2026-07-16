@@ -61,7 +61,7 @@ Pick the row that matches what's broken. Commands marked **(bridge-free)** work 
 Commands fall into two camps:
 
 **Bridge-free** — work on any Tauri 2 app, including release builds and crashed processes:
-`diagnose`, `forensics`, `app-paths`, `config inspect`, `os-logs`, `sidecar tap`, `sidecar replay`, plus `list-windows`, `info`, `diff`.
+`diagnose`, `forensics`, `app-paths`, `config inspect`, `os-logs`, `sidecar tap`, `sidecar replay`, `probe` (reports instead of throwing when no bridge exists), `logs` (except `--follow`, which needs a live bridge), `bundle` (best-effort — its optional capture phase needs a bridge), plus `list-windows`, `info`, `diff`.
 
 **Bridge-required** — need the dev bridge running inside a debug build:
 `screenshot --selector`, `dom`, `eval`, `wait --selector`, `ipc-monitor`, `console-monitor`, `rust-logs`, `storage`, `page-state`, `mutations`, `snapshot`, `click`, `type`, `scroll`, `focus`, `navigate`, `select`, `invoke`, `capture`, `check`, `store-inspect`, `process-tree`, `capabilities audit`, `webview attach`, `health`.

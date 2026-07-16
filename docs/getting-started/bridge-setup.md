@@ -81,6 +81,9 @@ tauri-agent-tools probe --json
 tauri-agent-tools dom --depth 2
 ```
 
+!!! note "Upgrading to bridge v0.8"
+    Bridge v0.8 adds a non-draining, long-polling cursor mode to `/logs`, which powers `logs --follow`. Upgrading is a drop-in re-copy of `examples/tauri-bridge/src/dev_bridge.rs` (step 2) — no `main.rs` changes needed. Against older bridges, `logs --follow` emits a one-time note and degrades to drain polling.
+
 ## How It Works
 
 ```mermaid
@@ -153,7 +156,7 @@ The bridge automatically captures Rust `tracing` log events. To also capture sid
 
 ```rust
 if cfg!(debug_assertions) {
-    let (port, log_buffer) = dev_bridge::start_bridge(app.handle())?;
+    let (port, log_buffer, registry) = dev_bridge::start_bridge(app.handle())?;
 
     // Spawn a sidecar with monitored output
     dev_bridge::spawn_sidecar_monitored(
@@ -161,6 +164,7 @@ if cfg!(debug_assertions) {
         "ffmpeg",
         &["-i", "input.mp4", "-f", "null", "-"],
         &log_buffer,
+        Some(&registry),
     )?;
 }
 ```

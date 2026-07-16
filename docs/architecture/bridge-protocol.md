@@ -4,14 +4,18 @@ The bridge is a lightweight HTTP server embedded in the Tauri app during develop
 
 ## Endpoints
 
-The bridge exposes four HTTP endpoints:
+The bridge exposes eight HTTP endpoints:
 
 | Endpoint | Method | Auth | Purpose |
 |----------|--------|------|---------|
 | `/eval` | POST | token | Evaluate JS in a webview (supports `window` param for multi-window) |
-| `/logs` | POST | token | Drain Rust tracing logs and sidecar output |
+| `/logs` | POST | token | Rust tracing logs and sidecar output — bare `{token}` drains; `{cursor, waitMs, limit}` (v0.8+) reads without draining |
 | `/describe` | POST | token | Report PID, window labels, and capabilities |
 | `/version` | GET | none | Bridge version and available endpoints |
+| `/process` | POST | token | Tauri PID, exe, args, uptime, and sidecar registry snapshot (v0.7+) |
+| `/capabilities` | POST | token | Declared Tauri capability set per window (v0.7+) |
+| `/devtools` | POST | token | Webview inspector URL or platform hint (v0.7+) |
+| `/health` | POST | token | Uptime, webview readiness, and sidecar liveness (v0.7+) |
 
 ## Eval Endpoint
 

@@ -37,6 +37,7 @@ Pick the row that matches what's broken. Each command works without the bridge u
 | App is running but bridge isn't responding | `tauri-agent-tools probe` | Detects whether the bridge process is up and shows token-file state |
 | App is running, bridge is up, but webview looks wrong | `tauri-agent-tools health --json` | Returns webview_ready + sidecar liveness (richer on bridge v0.7+; degrades to a liveness ping otherwise) |
 | Evidence is scattered across webview/Rust/sidecar logs | `tauri-agent-tools logs --config ./src-tauri --pretty` | Merges on-disk log files + the bridge ring buffer into one timestamp-ordered timeline |
+| Need to watch logs live while reproducing | `tauri-agent-tools logs --follow --pretty` | Needs bridge; multi-consumer-safe on bridge v0.8+, drain-polling fallback otherwise |
 | What did the sidecar actually spawn (MCP servers, workers)? | `tauri-agent-tools process-tree --deep --json` | Walks the real OS descendant tree, including unregistered grandchildren — no bridge needed |
 | Need one shareable archive of everything for a bug report | `tauri-agent-tools bundle --config ./src-tauri -o ./triage` | Logs + deep process tree + app-paths + forensics → redacted dir + `.tar.gz` |
 | A sidecar process is the suspect | `tauri-agent-tools sidecar tap --schema ./schema.json -- <cmd>` | Wrap-and-run the sidecar standalone; frame NDJSON; validate envelopes |
@@ -69,7 +70,7 @@ When in doubt, escalate to `diagnose` — its `summary.md` will tell you which d
 
 - All commands accept `--json` for machine-readable output.
 - Bundle commands (`forensics`, `diagnose`) write a `summary.md` agents can open directly and a `summary.json` agents can parse.
-- Streaming commands (`os-logs`, `rust-logs`, `sidecar tap`) and `logs` emit one NDJSON envelope per line on stdout.
+- Streaming commands (`os-logs`, `rust-logs`, `sidecar tap`, `logs --follow`) and one-shot `logs` emit one NDJSON envelope per line on stdout.
 - Bridge v0.7+ commands feature-detect via `GET /version` and **degrade gracefully** (a clear `note:`, plus an OS/eval fallback where possible) against older bridges. Pass `--strict` to turn a missing endpoint into a hard error instead.
 
 ## When this skill is wrong

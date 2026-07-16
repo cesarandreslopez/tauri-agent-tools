@@ -81,7 +81,8 @@ All adapters use ImageMagick for crop/resize operations via `src/util/image.ts`.
 - `getViewportSize()` — get `window.innerWidth/innerHeight`
 - `getDocumentTitle()` — get `document.title`
 - `getAccessibilityTree(selector, depth)` — walk the accessibility tree
-- `fetchLogs(timeout?)` — fetch Rust log entries from the `/logs` endpoint
+- `fetchLogs(timeout?)` — drain Rust log entries from the `/logs` endpoint
+- `fetchLogs({cursor, waitMs, limit, timeoutMs})` — non-draining cursor read (v0.8 bridge), returns `{entries, cursor, dropped}`
 - `ping()` — check if the bridge is reachable
 
 ## Token Discovery
@@ -92,7 +93,7 @@ All adapters use ImageMagick for crop/resize operations via `src/util/image.ts`.
 2. Parse each as JSON: `{ port, token, pid }`
 3. Check PID liveness via `process.kill(pid, 0)`
 4. Remove stale token files from dead processes
-5. Return the first live bridge config
+5. Within each directory, sort live bridges by token-file mtime (newest first, filename tie-break) and return the newest live bridge from the first directory that has one — with several bridge-enabled apps running, the CLI attaches to the most recently started one
 
 Also exports `discoverBridgesByPid()` for `list-windows` to map PIDs to bridge configs.
 

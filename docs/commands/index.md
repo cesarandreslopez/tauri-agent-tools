@@ -27,7 +27,7 @@ tauri-agent-tools provides 38 commands for inspecting, interacting with, monitor
 | `navigate` | Yes | Navigate within the app |
 | `select` | Yes | Select dropdown value or toggle checkbox |
 | `invoke` | Yes | Invoke a Tauri IPC command |
-| `probe` | Optional | Discover running bridges and check health |
+| `probe` | Optional | Discover running bridges and check health; reports `target.alive: false` instead of erroring when none found |
 | `capture` | Yes | Full debug evidence bundle |
 | `check` | Yes | Structured assertions (exit 0/1) |
 | `store-inspect` | Yes | Inspect reactive store state |
@@ -35,9 +35,9 @@ tauri-agent-tools provides 38 commands for inspecting, interacting with, monitor
 | `config inspect` | No | Snapshot `tauri.conf.json` + capability audit |
 | `os-logs` | No | Tail host OS logs filtered to a bundle id |
 | `sidecar tap` | No | Wrap a sidecar, frame stdout as NDJSON, validate |
-| `sidecar replay` | No | Replay a recorded NDJSON stream |
+| `sidecar replay` | No | Replay a recorded NDJSON stream; `--tap-format` unwraps tap wrapper rows, `--dir in\|out` filters by direction |
 | `forensics` | No | Post-crash bundle (works on dead apps) |
-| `logs` | Optional | Merge scattered app logs (on-disk + bridge ring buffer) into one timestamp-ordered stream |
+| `logs` | Optional | Merge scattered app logs (on-disk + bridge ring buffer) into one timestamp-ordered stream; `--follow` tails the live bridge via v0.8 non-draining cursor reads (drain-polling fallback on older bridges) |
 | `process-tree` | Yes (v0.7+) | Tauri PID + registered sidecars with liveness |
 | `capabilities audit` | Yes (v0.7+) | Live capability audit (wildcards, over-broad scopes) |
 | `webview attach` | Yes (v0.7+) | Webview inspector URL or platform hint |
@@ -89,7 +89,7 @@ tauri-agent-tools provides 38 commands for inspecting, interacting with, monitor
 
 ### Workflow
 
-- **probe** — discover running bridges, check health, list window labels
+- **probe** — discover running bridges, check health, list window labels; when no bridge is discoverable and no explicit `--port`/`--token`/`--pid` is given, emits a complete result with `target.alive: false` and an actionable note instead of erroring
 - **capture** — collect screenshot + DOM + page state + storage + console errors + Rust logs into a bundle
 - **check** — run structured assertions against DOM state (selector exists, text matches, no console errors)
 
@@ -101,9 +101,9 @@ Work without the dev bridge — for release builds, dead apps, and sidecar proce
 - **config inspect** — emit a structured snapshot of `tauri.conf.json` plus a capability/permission audit
 - **os-logs** — tail the host OS log stream filtered to a Tauri bundle id (NDJSON envelopes)
 - **sidecar tap** — wrap-and-run a sidecar binary, frame its stdout as NDJSON, validate against an optional JSON Schema
-- **sidecar replay** — replay a recorded NDJSON stream to stdout or into a fresh process
+- **sidecar replay** — replay a recorded NDJSON stream to stdout or into a fresh process; `--tap-format` unwraps `{dir,ts,line}` tap wrapper rows, optionally filtered by `--dir in|out`
 - **forensics** — one-shot bundle for post-crash analysis (composes the above; works on dead apps)
-- **logs** — merge an app's scattered logs (on-disk `tauri-plugin-log` files + the live bridge `/logs` ring buffer) into one timestamp-ordered NDJSON stream, normalized to UTC; filter by `--level`/`--source`/`--filter` and `--correlate` to infer correlation ids (works with no bridge)
+- **logs** — merge an app's scattered logs (on-disk `tauri-plugin-log` files + the live bridge `/logs` ring buffer) into one timestamp-ordered NDJSON stream, normalized to UTC; filter by `--level`/`--source`/`--filter` and `--correlate` to infer correlation ids (works with no bridge); `--follow` tails the live bridge via v0.8 non-draining cursor reads, falling back to drain-polling on older bridges (`--interval <ms>` sets the fallback poll interval, default 2000)
 
 ### Bridge-extending diagnostics (new in 0.7, requires bridge v0.7.0+)
 
@@ -117,7 +117,7 @@ Talk to new dev-bridge endpoints. Each feature-detects via `GET /version` and su
 ### Super-command
 
 - **diagnose** — best-effort. Composes `forensics` with live bridge data when reachable; degrades cleanly when not. Master `summary.md` includes a "Next steps" section pointing at the right deeper command.
-- **bundle** — collect a shareable incident archive (merged `logs` + deep `process-tree` + `app-paths` + `forensics`, plus an optional UI `capture`) into one directory and a `.tar.gz`. Secrets (`token`/`api_key`/`password`/…) are redacted from text artifacts on write; each phase degrades cleanly.
+- **bundle** — collect a shareable incident archive (merged `logs` + deep `process-tree` + `app-paths` + `forensics`, plus an optional UI `capture`) into one directory and a `.tar.gz`. Secrets (tokens, API keys, passwords, JWTs, AWS keys) and PII (emails, IPs, phone numbers, home paths — including base64-encoded ones) are redacted from text artifacts on write; JSON/NDJSON artifacts are re-serialized so they stay parseable; unredacted images are flagged as warnings; each phase degrades cleanly.
 
 ## Common Patterns
 

@@ -44,7 +44,7 @@ npx vitest run tests/commands/screenshot.test.ts
 | `src/util/redactText.ts` | `redactText()`, `redactJson()`, `redactDir()`, `scanResidualSecrets()` — secrets/PII redaction for shared artifacts (`bundle`) |
 | `src/util/mergeByTimestamp.ts` | `mergeByTimestamp()` — stable merge of timestamped streams into one UTC-ordered timeline |
 | `src/util/psTree.ts` | `snapshotProcesses()`, `buildDescendantTree()` — OS process-tree walk for `process-tree --deep` / `bundle` |
-| `examples/tauri-bridge/src/dev_bridge.rs` | Reference Rust bridge (~440 lines) — not part of build |
+| `examples/tauri-bridge/src/dev_bridge.rs` | Reference Rust bridge (~1200 lines) — not part of build |
 
 ## Architecture
 
@@ -54,7 +54,7 @@ npx vitest run tests/commands/screenshot.test.ts
 
 **Command registration pattern:** Each command file exports a `registerXxx(program, ...)` function. Commands that need the platform adapter receive `getAdapter` as a parameter. Commands that need the bridge use `resolveBridge()` from `shared.ts`, which handles auto-discovery or explicit `--port`/`--token`.
 
-**Bridge resolution flow:** `resolveBridge()` in `shared.ts` → `discoverBridge()` in `tokenDiscovery.ts` → scans `/tmp/tauri-dev-bridge-*.token` files → parses JSON (`{ port, token, pid }`) → checks PID liveness via `process.kill(pid, 0)` → cleans stale files from dead processes → returns first live bridge config. If both `--port` and `--token` are provided, auto-discovery is skipped.
+**Bridge resolution flow:** `resolveBridge()` in `shared.ts` → `discoverBridge()` in `tokenDiscovery.ts` → scans `/tmp/tauri-dev-bridge-*.token` files → parses JSON (`{ port, token, pid }`) → checks PID liveness via `process.kill(pid, 0)` → cleans stale files from dead processes → sorts live bridges by token-file mtime (newest first) → returns the newest live bridge config. If both `--port` and `--token` are provided, auto-discovery is skipped.
 
 **Platform adapter pattern:** `src/platform/` has four adapters (X11, Wayland/Sway, Hyprland, macOS) implementing a common interface (`findWindow`, `captureWindow`, `getWindowGeometry`, `getWindowName`, `listWindows`). Detection logic in `src/platform/detect.ts` selects the adapter at runtime.
 
@@ -64,7 +64,7 @@ npx vitest run tests/commands/screenshot.test.ts
 
 **Crop computation:** Screenshot commands combine window geometry from the platform adapter with element rect from the bridge to compute crop regions, accounting for window decorations (title bar, borders).
 
-**Rust bridge example:** `examples/tauri-bridge/src/dev_bridge.rs` (~440 lines) shows the Tauri-side HTTP server. Not part of the build — it's reference code for users integrating into their own Tauri apps.
+**Rust bridge example:** `examples/tauri-bridge/src/dev_bridge.rs` (~1200 lines) shows the Tauri-side HTTP server. Not part of the build — it's reference code for users integrating into their own Tauri apps.
 
 ## Key Constraints
 
@@ -89,7 +89,7 @@ npx vitest run tests/commands/screenshot.test.ts
 Publishing is automated by `.github/workflows/release.yml`, which fires on a pushed `v*` tag.
 
 1. Update the version in `package.json`, and keep `package-lock.json` in sync (`npm install --package-lock-only`). The skill `version:` fields in `.agents/skills/*/SKILL.md` should match too.
-2. Update `CHANGELOG.md` with a new `## [<version>] - <date>` section — the release workflow extracts this section verbatim as the GitHub Release body.
+2. Update `CHANGELOG.md` with a new `## [<version>] - <date>` section — the release workflow extracts this section verbatim as the GitHub Release body. `docs/changelog.md` is a manual mirror of `CHANGELOG.md` — re-sync it with the new release section in the same release commit.
 3. Commit on `main` (e.g. `chore: release v<version>`).
 4. `git push origin main`, then `git tag v<version>` and `git push origin v<version>`. The tag must point at a commit that is on `main` (the workflow rejects it otherwise).
 5. `release.yml` validates that the tag matches `package.json`, runs lint + build + tests, then `npm publish` (skips if already published) and creates the GitHub Release. **Do not run `npm publish` by hand.**
@@ -121,7 +121,7 @@ Dependencies flow strictly downward. Enforced by `scripts/check-imports.mjs`.
 
 ```bash
 npx tsc --noEmit                              # Type check
-npm test                                      # All tests (749+ tests, 63 files)
+npm test                                      # All tests (784+ tests, 66 files)
 node scripts/check-imports.mjs                # Import DAG linter
 node scripts/check-bridge-parity.mjs          # Bridge endpoint/min-version parity (also part of npm run lint)
 npx madge --circular --extensions ts,tsx src/  # Circular dependency check

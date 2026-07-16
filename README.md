@@ -269,10 +269,12 @@ Interaction commands dispatch DOM events inside the webview. They require the de
 
 | Command | Description |
 |---------|-------------|
-| `probe` | Discover running bridges, check health, list windows |
+| `probe` | Discover running bridges, check health, list windows. With no explicit `--port`/`--token`/`--pid` and no bridge discoverable, reports instead of throwing (`target.alive=false` plus an actionable note, so callers can branch on the JSON) |
 | `capture -o <dir>` | Full debug evidence bundle (screenshot, DOM, page state, storage, console errors, Rust logs) |
 | `check` | Structured assertions (`--selector`, `--text`, `--eval`, `--no-errors`) — exits 0/1 |
 | `store-inspect` | Inspect reactive store state (Pinia, Vue devtools, custom hooks) |
+
+`capture`'s pipeline is also callable as a library: `captureToDir(bridge, adapter, opts)` returns the `CaptureManifest`. Deep-import it from `tauri-agent-tools/dist/commands/capture.js` — there is no package-root library entry point (the root is the CLI).
 
 ### Targeting Flags
 
@@ -342,6 +344,7 @@ tauri-agent-tools os-logs --level error --source main --duration 30000
 tauri-agent-tools sidecar tap --schema ./schema.json --record /tmp/run.ndjson -- node my-sidecar.js
 # Replay the recording deterministically — to stdout or into a fresh sidecar's stdin
 tauri-agent-tools sidecar replay /tmp/run.ndjson --to-exec node my-sidecar.js --rate 100
+tauri-agent-tools sidecar replay /tmp/ipc-tap.ndjson --tap-format --dir out   # (new in 0.9) unwrap {dir,ts,line} tap rows, replay one direction
 
 # Forensic bundle for post-crash analysis (composes the above; works on dead apps)
 tauri-agent-tools forensics --config ./src-tauri -o ./forensics-out
@@ -364,13 +367,17 @@ tauri-agent-tools logs --config ./src-tauri --pretty
 tauri-agent-tools logs --level warn --correlate          # filter + infer run_id/requestId ids
 tauri-agent-tools logs --no-bridge                       # on-disk files only (no running app)
 
+# Tail live bridge logs until interrupted (new in 0.9; v0.8 bridge: non-draining
+# cursor reads — older bridges degrade to drain polling every --interval ms, default 2000)
+tauri-agent-tools logs --follow --level warn
+
 # Collect a shareable incident bundle: merged logs + deep process tree + app-paths +
 # forensics (+ optional UI capture) → a redacted directory and a .tar.gz.
 tauri-agent-tools bundle --config ./src-tauri -o ./incident --since 10m
 tauri-agent-tools bundle --with-capture                  # also snapshot the UI (needs live bridge)
 ```
 
-`logs` works with no bridge (it reads the on-disk log files); a running bridge just adds the live ring buffer. `bundle` redacts secrets (`token`/`api_key`/`password`/…) from text artifacts on write and degrades cleanly when a phase can't run.
+`logs` works with no bridge (it reads the on-disk log files); a running bridge just adds the live ring buffer. `bundle` redacts secrets (tokens, API keys, passwords, JWTs, AWS keys) and PII (emails, IPs, phone numbers, home paths — including base64-encoded ones) from artifacts on write; `.json`/`.ndjson` artifacts stay parseable, unredacted images are flagged as warnings, and it degrades cleanly when a phase can't run.
 
 ## How It Works
 
