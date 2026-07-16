@@ -146,6 +146,13 @@ POST http://127.0.0.1:{port}/logs
 | Field | Type | Description |
 |-------|------|-------------|
 | `token` | string | 32-character authentication token |
+| `cursor` | number (optional, v0.8+) | Read entries with `id > cursor` **without draining**; `0` replays the full buffer |
+| `waitMs` | number (optional, v0.8+) | Long-poll up to this many ms for new entries (capped at 25000); only with `cursor` |
+| `limit` | number (optional, v0.8+) | Max entries per response, clamped to 1..1000; only with `cursor` |
+
+The mode is selected by the **presence** of `cursor`: a bare `{ token }` request
+keeps the legacy drain semantics byte-for-byte, so pre-v0.8 callers are
+unaffected.
 
 ### Response
 
@@ -155,6 +162,7 @@ POST http://127.0.0.1:{port}/logs
 {
   "entries": [
     {
+      "id": 41,
       "timestamp": 1710000000000,
       "level": "info",
       "target": "myapp::db",
@@ -162,28 +170,40 @@ POST http://127.0.0.1:{port}/logs
       "source": "rust"
     },
     {
+      "id": 42,
       "timestamp": 1710000001000,
       "level": "warn",
       "target": "stderr",
       "message": "deprecated flag used",
       "source": "sidecar:ffmpeg"
     }
-  ]
+  ],
+  "cursor": 42,
+  "dropped": 0
 }
 ```
 
 | Field | Type | Description |
 |-------|------|-------------|
+| `entries[].id` | number (v0.8+) | Monotonic entry id, assigned at capture |
 | `entries[].timestamp` | number | Milliseconds since UNIX epoch |
 | `entries[].level` | string | `trace`, `debug`, `info`, `warn`, or `error` |
 | `entries[].target` | string | Rust module path or `stdout`/`stderr` for sidecars |
 | `entries[].message` | string | Log message text |
 | `entries[].source` | string | `rust` for tracing logs, `sidecar:<name>` for sidecar output |
+| `cursor` | number (cursor mode only) | Pass back on the next request to resume after the last returned entry |
+| `dropped` | number (cursor mode only) | Entries evicted from the ring buffer past the cursor (lost to overflow) |
+
+`cursor` and `dropped` are omitted in drain mode — their presence on the
+response is how clients feature-detect cursor support with zero extra
+round-trips.
 
 ### Behavior
 
-- Calling `/logs` **drains** the buffer — each entry is returned only once
-- The buffer holds up to 1000 entries; oldest entries are dropped on overflow
+- Drain mode (`{ token }` only) **drains** the buffer — each entry is returned only once, and concurrent consumers steal entries from each other
+- Cursor mode (v0.8+) is **non-draining** — each consumer tracks its own cursor, so any number of consumers can tail concurrently
+- Cursor requests with `waitMs > 0` long-poll on a worker thread (the bridge's accept loop is serial, so waiting inline would stall other endpoints)
+- The buffer holds up to 1000 entries; oldest entries are dropped on overflow (visible as `dropped` in cursor mode)
 - The buffer is populated by a `tracing::Layer` (Rust logs) and background reader threads (sidecar stdout/stderr)
 
 ## Version Endpoint
@@ -200,7 +220,7 @@ No authentication required.
 
 ```json
 {
-  "version": "0.7.0",
+  "version": "0.8.0",
   "endpoints": ["/eval", "/logs", "/describe", "/version", "/process", "/capabilities", "/devtools", "/health"]
 }
 ```

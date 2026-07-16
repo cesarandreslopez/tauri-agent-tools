@@ -6,7 +6,7 @@ use std::io::{BufRead, BufReader};
 use std::process::{Command, Stdio};
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use tauri::{AppHandle, Manager};
 use tiny_http::{Header, Response, Server};
 use tracing_subscriber::layer::SubscriberExt;
@@ -14,7 +14,7 @@ use tracing_subscriber::util::SubscriberInitExt;
 
 /// Bridge protocol version exposed via `GET /version`. Bumped whenever the
 /// HTTP surface changes shape so CLI clients can feature-detect.
-pub const BRIDGE_VERSION: &str = "0.7.0";
+pub const BRIDGE_VERSION: &str = "0.8.0";
 
 #[derive(Deserialize)]
 struct EvalRequest {
@@ -27,6 +27,12 @@ struct EvalRequest {
 #[derive(Deserialize)]
 struct LogRequest {
     token: String,
+    #[serde(default)]
+    cursor: Option<u64>,
+    #[serde(default, rename = "waitMs")]
+    wait_ms: Option<u64>,
+    #[serde(default)]
+    limit: Option<usize>,
 }
 
 #[derive(Serialize)]
@@ -36,6 +42,7 @@ struct EvalResponse {
 
 #[derive(Clone, Serialize)]
 pub struct LogEntry {
+    pub id: u64,
     pub timestamp: u64,
     pub level: String,
     pub target: String,
@@ -46,6 +53,10 @@ pub struct LogEntry {
 #[derive(Serialize)]
 struct LogResponse {
     entries: Vec<LogEntry>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    cursor: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    dropped: Option<u64>,
 }
 
 #[derive(Deserialize)]
@@ -234,28 +245,113 @@ pub fn register_sidecar(
 
 /// Ring buffer for log entries. Thread-safe, capped at 1000 entries.
 pub struct LogBuffer {
-    entries: Mutex<VecDeque<LogEntry>>,
+    state: Mutex<LogBufferState>,
+    notify: Condvar,
+}
+
+struct LogBufferState {
+    entries: VecDeque<LogEntry>,
+    next_id: u64,
 }
 
 impl LogBuffer {
     pub fn new() -> Self {
         Self {
-            entries: Mutex::new(VecDeque::new()),
+            state: Mutex::new(LogBufferState {
+                entries: VecDeque::new(),
+                next_id: 1,
+            }),
+            notify: Condvar::new(),
         }
     }
 
-    pub fn push(&self, entry: LogEntry) {
-        let mut buf = self.entries.lock().unwrap();
-        if buf.len() >= 1000 {
-            buf.pop_front();
+    pub fn push(&self, mut entry: LogEntry) {
+        let mut state = self.state.lock().unwrap();
+        entry.id = state.next_id;
+        state.next_id += 1;
+        if state.entries.len() >= 1000 {
+            state.entries.pop_front();
         }
-        buf.push_back(entry);
+        state.entries.push_back(entry);
+        self.notify.notify_all();
     }
 
     pub fn drain(&self) -> Vec<LogEntry> {
-        let mut buf = self.entries.lock().unwrap();
-        buf.drain(..).collect()
+        let mut state = self.state.lock().unwrap();
+        state.entries.drain(..).collect()
     }
+
+    pub fn read_since(&self, cursor: u64, limit: usize) -> (Vec<LogEntry>, u64, u64) {
+        let state = self.state.lock().unwrap();
+        read_since_locked(&state, cursor, limit)
+    }
+
+    fn wait_until_entries_since(&self, cursor: u64, timeout: Duration) {
+        if timeout.is_zero() {
+            return;
+        }
+        let state = self.state.lock().unwrap();
+        if has_entries_since(&state, cursor) {
+            return;
+        }
+        let _ = self
+            .notify
+            .wait_timeout_while(state, timeout, |state| !has_entries_since(state, cursor))
+            .unwrap();
+    }
+}
+
+fn read_since_locked(
+    state: &LogBufferState,
+    cursor: u64,
+    limit: usize,
+) -> (Vec<LogEntry>, u64, u64) {
+    let capped_limit = limit.clamp(1, 1000);
+    let dropped = if cursor == 0 {
+        0
+    } else {
+        state
+            .entries
+            .front()
+            .map(|entry| entry.id.saturating_sub(cursor.saturating_add(1)))
+            .unwrap_or(0)
+    };
+    let entries: Vec<LogEntry> = state
+        .entries
+        .iter()
+        .filter(|entry| entry.id > cursor)
+        .take(capped_limit)
+        .cloned()
+        .collect();
+    let next_cursor = entries.last().map(|entry| entry.id).unwrap_or(cursor);
+    (entries, next_cursor, dropped)
+}
+
+fn has_entries_since(state: &LogBufferState, cursor: u64) -> bool {
+    state
+        .entries
+        .back()
+        .map(|entry| entry.id > cursor)
+        .unwrap_or(false)
+}
+
+fn respond_log_cursor_request(
+    request: tiny_http::Request,
+    buffer: Arc<LogBuffer>,
+    cursor: u64,
+    wait_ms: u64,
+    limit: usize,
+) {
+    buffer.wait_until_entries_since(cursor, Duration::from_millis(wait_ms));
+    let (entries, cursor, dropped) = buffer.read_since(cursor, limit);
+    let resp = LogResponse {
+        entries,
+        cursor: Some(cursor),
+        dropped: Some(dropped),
+    };
+    let json = serde_json::to_string(&resp).unwrap();
+    let header = Header::from_bytes("Content-Type", "application/json").unwrap();
+    let _ = request.respond(Response::from_string(json).with_header(header));
 }
 
 /// A tracing layer that captures log events into a `LogBuffer`.
@@ -278,6 +374,7 @@ where
         event.record(&mut visitor);
 
         let entry = LogEntry {
+            id: 0,
             timestamp: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap_or_default()
@@ -372,6 +469,7 @@ pub fn spawn_sidecar_monitored(
             for line in reader.lines() {
                 let Ok(line) = line else { break };
                 buffer.push(LogEntry {
+                    id: 0,
                     timestamp: std::time::SystemTime::now()
                         .duration_since(std::time::UNIX_EPOCH)
                         .unwrap_or_default()
@@ -394,6 +492,7 @@ pub fn spawn_sidecar_monitored(
             for line in reader.lines() {
                 let Ok(line) = line else { break };
                 buffer.push(LogEntry {
+                    id: 0,
                     timestamp: std::time::SystemTime::now()
                         .duration_since(std::time::UNIX_EPOCH)
                         .unwrap_or_default()
@@ -489,6 +588,10 @@ fn build_eval_callback_js(js: &str, request_id: &str) -> String {
 /// registry is what powers the `/process` and `/health` endpoints' visibility
 /// into the process tree. Callers that don't spawn sidecars can ignore the
 /// registry handle.
+///
+/// `/logs` supports legacy drain mode and v0.8 cursor mode. Cursor requests
+/// are non-draining and may long-poll on a worker thread, so concurrent
+/// consumers no longer empty each other's buffers.
 pub fn start_bridge(
     app: &AppHandle,
 ) -> Result<(u16, Arc<LogBuffer>, Arc<SidecarRegistry>), String> {
@@ -620,8 +723,29 @@ pub fn start_bridge(
                     continue;
                 }
 
+                if let Some(cursor) = log_req.cursor {
+                    let wait_ms = log_req.wait_ms.unwrap_or(0).min(25_000);
+                    let limit = log_req.limit.unwrap_or(1000).clamp(1, 1000);
+                    let buffer = server_log_buffer.clone();
+                    if wait_ms > 0 {
+                        // Long-poll on a worker thread: the bridge serves
+                        // requests serially, so waiting inline would stall
+                        // every other endpoint for up to waitMs.
+                        thread::spawn(move || {
+                            respond_log_cursor_request(request, buffer, cursor, wait_ms, limit);
+                        });
+                    } else {
+                        respond_log_cursor_request(request, buffer, cursor, wait_ms, limit);
+                    }
+                    continue;
+                }
+
                 let entries = server_log_buffer.drain();
-                let resp = LogResponse { entries };
+                let resp = LogResponse {
+                    entries,
+                    cursor: None,
+                    dropped: None,
+                };
                 let json = serde_json::to_string(&resp).unwrap();
                 let header = Header::from_bytes("Content-Type", "application/json").unwrap();
                 let _ = request.respond(Response::from_string(json).with_header(header));
@@ -911,6 +1035,69 @@ mod tests {
         assert!(EVAL_TIMEOUT_MESSAGE.contains("no result callback received"));
         assert!(EVAL_TIMEOUT_MESSAGE.contains("Re-copy"));
         assert!(EVAL_TIMEOUT_MESSAGE.contains("dev_bridge.rs"));
+    }
+
+    #[test]
+    fn log_buffer_assigns_monotonic_ids_and_cursor_reads_do_not_drain() {
+        let buffer = LogBuffer::new();
+        buffer.push(test_log_entry("first"));
+        buffer.push(test_log_entry("second"));
+
+        let (entries, cursor, dropped) = buffer.read_since(0, 1000);
+        assert_eq!(
+            entries.iter().map(|entry| entry.id).collect::<Vec<_>>(),
+            vec![1, 2]
+        );
+        assert_eq!(cursor, 2);
+        assert_eq!(dropped, 0);
+
+        let drained = buffer.drain();
+        assert_eq!(
+            drained.iter().map(|entry| entry.id).collect::<Vec<_>>(),
+            vec![1, 2]
+        );
+    }
+
+    #[test]
+    fn log_buffer_read_since_honors_limit_and_advances_to_last_returned_id() {
+        let buffer = LogBuffer::new();
+        buffer.push(test_log_entry("first"));
+        buffer.push(test_log_entry("second"));
+        buffer.push(test_log_entry("third"));
+
+        let (entries, cursor, dropped) = buffer.read_since(0, 2);
+        assert_eq!(
+            entries.iter().map(|entry| entry.id).collect::<Vec<_>>(),
+            vec![1, 2]
+        );
+        assert_eq!(cursor, 2);
+        assert_eq!(dropped, 0);
+    }
+
+    #[test]
+    fn log_buffer_reports_entries_evicted_past_the_cursor() {
+        let buffer = LogBuffer::new();
+        for index in 0..1002 {
+            buffer.push(test_log_entry(&format!("entry-{index}")));
+        }
+
+        let (entries, cursor, dropped) = buffer.read_since(1, 1000);
+        assert_eq!(entries.first().map(|entry| entry.id), Some(3));
+        assert_eq!(entries.last().map(|entry| entry.id), Some(1002));
+        assert_eq!(entries.len(), 1000);
+        assert_eq!(cursor, 1002);
+        assert_eq!(dropped, 1);
+    }
+
+    fn test_log_entry(message: &str) -> LogEntry {
+        LogEntry {
+            id: 0,
+            timestamp: 1,
+            level: "info".to_string(),
+            target: "test".to_string(),
+            message: message.to_string(),
+            source: "rust".to_string(),
+        }
     }
 }
 

@@ -85,11 +85,11 @@ tauri-agent-tools eval "document.title"
 1. Bridge starts an HTTP server on a random localhost port
 2. A token file with `{ port, token, pid }` is written to `/tmp/`
 3. `tauri-agent-tools` discovers the token file and authenticates via the token
-4. The bridge exposes four endpoints: `POST /eval` (JS evaluation), `POST /logs` (Rust log retrieval), `POST /describe` (bridge metadata), and `GET /version` (unauthenticated health check)
+4. The bridge exposes `POST /eval` (JS evaluation), `POST /logs` (Rust log retrieval), `POST /describe` (bridge metadata), `GET /version` (unauthenticated health check), and the v0.7 diagnostics endpoints `POST /process`, `POST /capabilities`, `POST /devtools`, and `POST /health`
 5. `/eval` accepts an optional `window` field to target specific webview windows (defaults to `"main"`)
 6. The injected JS evaluates the expression, then calls back into Rust via `window.__TAURI_INTERNALS__.invoke("__dev_bridge_result", { id, value })` to deliver the result, falling back to `window.__TAURI__.core.invoke()` for older/global-enabled apps
 7. The HTTP handler thread waits for the result (up to 5 seconds) and returns it as JSON
-8. `/logs` drains the ring buffer of captured `tracing` events and returns them as JSON
+8. `/logs` returns captured `tracing` events as JSON — a bare `{ token }` request drains the ring buffer (legacy mode), while a request with `{ cursor, waitMs, limit }` (v0.8+) reads without draining so multiple consumers can tail concurrently; cursor requests may long-poll up to `waitMs` and report `dropped` entries evicted past the cursor
 9. `/describe` returns PID, window labels, and capabilities
 10. The token file is cleaned up when the app exits
 
