@@ -8,6 +8,7 @@ const FALLBACK_DIR = '/tmp';
 const fsMock = vi.hoisted(() => ({
   dirs: new Set<string>(),
   files: new Map<string, string>(),
+  mtimes: new Map<string, number>(),
 }));
 
 const osMock = vi.hoisted(() => ({
@@ -39,8 +40,16 @@ vi.mock('node:fs/promises', () => ({
     }
     return content;
   }),
+  stat: vi.fn(async (fileLike: string) => {
+    const filePath = String(fileLike);
+    if (!fsMock.files.has(filePath)) {
+      throw Object.assign(new Error(`ENOENT: ${filePath}`), { code: 'ENOENT' });
+    }
+    return { mtimeMs: fsMock.mtimes.get(filePath) ?? 0 };
+  }),
   unlink: vi.fn(async (fileLike: string) => {
     const filePath = String(fileLike);
+    fsMock.mtimes.delete(filePath);
     if (!fsMock.files.delete(filePath)) {
       throw Object.assign(new Error(`ENOENT: ${filePath}`), { code: 'ENOENT' });
     }
@@ -59,6 +68,7 @@ describe('tokenDiscovery', () => {
     osMock.tmpDir = PRIMARY_DIR;
     fsMock.dirs.clear();
     fsMock.files.clear();
+    fsMock.mtimes.clear();
     fsMock.dirs.add(PRIMARY_DIR);
     fsMock.dirs.add(FALLBACK_DIR);
   });
@@ -69,12 +79,15 @@ describe('tokenDiscovery', () => {
     dir: string,
     pid: number,
     data: TokenData,
+    mtimeMs = 1,
   ): void {
-    writeRawFile(dir, `tauri-dev-bridge-${pid}.token`, JSON.stringify(data));
+    writeRawFile(dir, `tauri-dev-bridge-${pid}.token`, JSON.stringify(data), mtimeMs);
   }
 
-  function writeRawFile(dir: string, fileName: string, content: string): void {
-    fsMock.files.set(join(dir, fileName), content);
+  function writeRawFile(dir: string, fileName: string, content: string, mtimeMs = 1): void {
+    const filePath = join(dir, fileName);
+    fsMock.files.set(filePath, content);
+    fsMock.mtimes.set(filePath, mtimeMs);
   }
 
   function listTokenFiles(dir: string): string[] {
@@ -194,6 +207,99 @@ describe('tokenDiscovery', () => {
       const config = await discoverBridge();
       expect(config).not.toBeNull();
       expect([1111, 2222]).toContain(config!.port);
+    });
+
+    it('returns the newest live bridge within os.tmpdir()', async () => {
+      writeTokenFile(
+        PRIMARY_DIR,
+        process.pid,
+        {
+          port: 1111,
+          token: 'older',
+          pid: process.pid,
+        },
+        100,
+      );
+      writeRawFile(
+        PRIMARY_DIR,
+        `tauri-dev-bridge-${process.pid + 100000}.token`,
+        JSON.stringify({ port: 2222, token: 'newer', pid: process.pid }),
+        200,
+      );
+
+      const config = await discoverBridge();
+      expect(config).toEqual({ port: 2222, token: 'newer' });
+    });
+
+    it('uses filename as a deterministic tie-break for equal mtimes', async () => {
+      writeRawFile(
+        PRIMARY_DIR,
+        'tauri-dev-bridge-100.token',
+        JSON.stringify({ port: 1000, token: 'lower-name', pid: process.pid }),
+        100,
+      );
+      writeRawFile(
+        PRIMARY_DIR,
+        'tauri-dev-bridge-200.token',
+        JSON.stringify({ port: 2000, token: 'higher-name', pid: process.pid }),
+        100,
+      );
+
+      const config = await discoverBridge();
+      expect(config).toEqual({ port: 2000, token: 'higher-name' });
+    });
+
+    it('excludes stale dead-pid tokens before choosing the newest bridge', async () => {
+      writeTokenFile(
+        PRIMARY_DIR,
+        999999,
+        {
+          port: 9999,
+          token: 'stale-newest',
+          pid: 999999,
+        },
+        300,
+      );
+      writeTokenFile(
+        PRIMARY_DIR,
+        process.pid,
+        {
+          port: 1111,
+          token: 'live-older',
+          pid: process.pid,
+        },
+        100,
+      );
+
+      const config = await discoverBridge();
+      expect(config).toEqual({ port: 1111, token: 'live-older' });
+      expect(listTokenFiles(PRIMARY_DIR)).toEqual([`tauri-dev-bridge-${process.pid}.token`]);
+    });
+
+    it('keeps os.tmpdir priority even when /tmp has a newer live bridge', async () => {
+      writeTokenFile(
+        FALLBACK_DIR,
+        process.pid,
+        {
+          port: 2222,
+          token: 'fallback-newer',
+          pid: process.pid,
+        },
+        200,
+      );
+      writeTokenFile(
+        PRIMARY_DIR,
+        process.pid,
+        {
+          port: 1111,
+          token: 'primary-older',
+          pid: process.pid,
+        },
+        100,
+      );
+
+      const config = await discoverBridge();
+      expect(config).toEqual({ port: 1111, token: 'primary-older' });
     });
 
     it('does not scan /tmp twice when os.tmpdir() is also /tmp', async () => {

@@ -1,4 +1,4 @@
-import { readdir, readFile, unlink } from 'node:fs/promises';
+import { readdir, readFile, stat, unlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { BridgeConfig } from '../schemas/bridge.js';
@@ -9,6 +9,8 @@ const TOKEN_PREFIX = 'tauri-dev-bridge-';
 const TOKEN_SUFFIX = '.token';
 
 interface DiscoveredBridge {
+  fileName: string;
+  mtimeMs: number;
   pid: number;
   config: BridgeConfig;
 }
@@ -43,6 +45,7 @@ async function scanTokenDir(tokenDir: string): Promise<DiscoveredBridge[]> {
   for (const file of tokenFiles) {
     const filePath = join(tokenDir, file);
     try {
+      const fileStats = await stat(filePath);
       const content = await readFile(filePath, 'utf-8');
       const data = TokenFileSchema.parse(JSON.parse(content));
 
@@ -53,6 +56,8 @@ async function scanTokenDir(tokenDir: string): Promise<DiscoveredBridge[]> {
       }
 
       found.push({
+        fileName: file,
+        mtimeMs: fileStats.mtimeMs,
         pid: data.pid,
         config: { port: data.port, token: data.token },
       });
@@ -62,7 +67,7 @@ async function scanTokenDir(tokenDir: string): Promise<DiscoveredBridge[]> {
     }
   }
 
-  return found;
+  return found.sort((a, b) => b.mtimeMs - a.mtimeMs || b.fileName.localeCompare(a.fileName));
 }
 
 export async function discoverBridge(): Promise<BridgeConfig | null> {
