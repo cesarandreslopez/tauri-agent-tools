@@ -68,4 +68,36 @@ describe('sidecar replay command (e2e)', () => {
     ]);
     expect(stdout.trim().split('\n')).toEqual(['{"i":0}', '{"i":1}']);
   });
+
+  it('unwraps tap-format lines and filters by direction', async () => {
+    const inbound = '{"jsonrpc":"2.0","method":"run","id":1}';
+    const outbound = '{"jsonrpc":"2.0","result":{"ok":true},"id":1}';
+    const recording = writeRecording('tap.ndjson', [
+      JSON.stringify({ dir: 'in', ts: '2026-07-03T08:00:00.000Z', line: inbound }),
+      JSON.stringify({ dir: 'out', ts: '2026-07-03T08:00:01.000Z', line: outbound }),
+    ]);
+
+    const { stdout } = await execFileP('node', [
+      CLI,
+      'sidecar',
+      'replay',
+      recording,
+      '--tap-format',
+      '--dir',
+      'in',
+      '--to-stdout',
+    ]);
+
+    expect(stdout.trim().split('\n')).toEqual([inbound]);
+  });
+
+  it('rejects malformed tap-format lines with the expected wrapper shape', async () => {
+    const recording = writeRecording('bad-tap.ndjson', ['{"dir":"in","line":7}']);
+
+    await expect(
+      execFileP('node', [CLI, 'sidecar', 'replay', recording, '--tap-format', '--to-stdout']),
+    ).rejects.toMatchObject({
+      stderr: expect.stringContaining('expected tap wrapper with dir "in"|"out", ts string, and line string'),
+    });
+  });
 });

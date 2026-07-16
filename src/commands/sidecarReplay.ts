@@ -8,6 +8,8 @@ interface SidecarReplayOpts {
   toExec?: string;
   rate?: string;
   loop?: boolean;
+  tapFormat?: boolean;
+  dir?: string;
 }
 
 /**
@@ -29,17 +31,24 @@ export function registerSidecarReplay(program: Command): void {
     .option('--to-stdout', 'Emit lines verbatim to stdout (default)')
     .option('--to-exec <cmd>', 'Pipe lines into the stdin of this command (split with spaces for args)')
     .option('--rate <lps>', 'Lines per second (default: unlimited — emit as fast as possible)')
+    .option('--tap-format', 'Unwrap {dir,ts,line} tap wrapper rows (e.g. an IPC tap recording) before replaying')
+    .option('--dir <dir>', 'Replay only tap rows in this direction: in | out')
     .option('--loop', 'After EOF, restart the file from the top until interrupted')
     .action(async (file: string, opts: SidecarReplayOpts) => {
       if (!existsSync(file)) {
         throw new Error(`Recording file not found: ${file}`);
       }
+      const dir = parseTapDir(opts.dir);
+      if (dir != null && opts.tapFormat !== true) {
+        throw new Error('--dir requires --tap-format');
+      }
       const rate = opts.rate ? parseRate(opts.rate) : Number.POSITIVE_INFINITY;
       const delayMs = Number.isFinite(rate) ? Math.round(1000 / rate) : 0;
 
-      const lines = (await readFile(file, 'utf-8'))
+      const rawLines = (await readFile(file, 'utf-8'))
         .split(/\r?\n/)
         .filter((l) => l.length > 0);
+      const lines = opts.tapFormat === true ? unwrapTapLines(rawLines, dir) : rawLines;
 
       if (lines.length === 0) {
         process.stderr.write(`[sidecar-replay] recording is empty: ${file}\n`);
@@ -52,6 +61,44 @@ export function registerSidecarReplay(program: Command): void {
         await replayToStdout(lines, delayMs, opts.loop ?? false);
       }
     });
+}
+
+function parseTapDir(input: string | undefined): 'in' | 'out' | undefined {
+  if (input == null) return undefined;
+  if (input === 'in' || input === 'out') return input;
+  throw new Error('--dir must be "in" or "out"');
+}
+
+function unwrapTapLines(lines: string[], dir: 'in' | 'out' | undefined): string[] {
+  const out: string[] = [];
+  lines.forEach((line, index) => {
+    const parsed = parseTapWrapper(line, index + 1);
+    if (dir == null || parsed.dir === dir) out.push(parsed.line);
+  });
+  return out;
+}
+
+function parseTapWrapper(line: string, lineNumber: number): { dir: 'in' | 'out'; line: string } {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(line) as unknown;
+  } catch {
+    throw tapFormatError(lineNumber);
+  }
+  if (!isRecord(parsed)) throw tapFormatError(lineNumber);
+  if (parsed.dir !== 'in' && parsed.dir !== 'out') throw tapFormatError(lineNumber);
+  if (typeof parsed.ts !== 'string' || typeof parsed.line !== 'string') throw tapFormatError(lineNumber);
+  return { dir: parsed.dir, line: parsed.line };
+}
+
+function tapFormatError(lineNumber: number): Error {
+  return new Error(
+    `tap-format line ${lineNumber}: expected tap wrapper with dir "in"|"out", ts string, and line string`,
+  );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
 function parseRate(input: string): number {
