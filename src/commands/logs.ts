@@ -14,6 +14,10 @@ import {
   type MergedLogEntry,
 } from '../util/logMerge.js';
 import type { OsLogLevel } from '../schemas/osLog.js';
+import type { RustLogEntry } from '../schemas/bridge.js';
+
+export const LOG_CURSOR_UNAVAILABLE_NOTE =
+  'bridge <0.8 has no log cursor; using drain polling (entries may be lost between polls)';
 
 interface LogsOpts extends BridgeOpts {
   config?: string;
@@ -28,9 +32,32 @@ interface LogsOpts extends BridgeOpts {
   source?: string;
   filter?: string;
   correlate?: boolean;
+  follow?: boolean;
+  interval: number;
   raw?: boolean;
   json?: boolean;
   pretty?: boolean;
+}
+
+export interface LogsFollowState {
+  cursor: number;
+  drainFallback: boolean;
+  warnedDrainFallback: boolean;
+}
+
+interface FollowBridgeClient {
+  fetchLogs(
+    arg?:
+      | number
+      | { cursor?: number; waitMs?: number; limit?: number; timeoutMs?: number },
+  ): Promise<RustLogEntry[] | { entries: RustLogEntry[]; cursor?: number; dropped?: number }>;
+}
+
+interface ReadFollowBridgeBatchOptions {
+  waitMs?: number;
+  limit?: number;
+  intervalMs?: number;
+  warn?: (message: string) => void;
 }
 
 function collect(value: string, prev: string[]): string[] {
@@ -52,6 +79,8 @@ export function registerLogs(program: Command): void {
     .option('--source <regex>', 'Filter by normalized source (regex), e.g. "sidecar:" or "file:"')
     .option('--filter <regex>', 'Filter messages by regex')
     .option('--correlate', 'Infer correlation ids (run_id, requestId, …) into a correlation field')
+    .option('--follow', 'Follow live bridge logs until interrupted')
+    .option('--interval <ms>', 'Drain fallback polling interval for --follow', parseInt, 2000)
     .option('--raw', 'Include the raw source payload/line in NDJSON output')
     .option('--json', 'Emit NDJSON, one object per line (this is the default; accepted for consistency)')
     .option('--pretty', 'Human-readable output (overrides --json)');
@@ -62,6 +91,11 @@ export function registerLogs(program: Command): void {
     const minLevel = opts.level ? validateLevel(opts.level) : null;
     const sourceRe = opts.source ? compileRegex(opts.source, 'source') : null;
     const filterRe = opts.filter ? compileRegex(opts.filter, 'filter') : null;
+
+    if (opts.follow) {
+      await followBridgeLogs(opts, minLevel, sourceRe, filterRe);
+      return;
+    }
 
     const notes: string[] = [];
 
@@ -102,37 +136,146 @@ export function registerLogs(program: Command): void {
 
     // ── Merge + filter ──────────────────────────────────────────────────────
     let merged = mergeByTimestamp<MergedLogEntry>([fileEntries, bridgeEntries]);
-    merged = merged.filter((e) => {
-      if (minLevel && LEVEL_RANK[e.level] < LEVEL_RANK[minLevel]) return false;
-      if (sourceRe && !sourceRe.test(e.source)) return false;
-      if (filterRe && !filterRe.test(e.message)) return false;
-      return true;
-    });
-    if (opts.correlate) {
-      merged = merged.map((e) => {
-        const correlation = inferCorrelation(e.message);
-        return correlation ? { ...e, correlation } : e;
-      });
-    }
+    merged = prepareEntries(merged, { minLevel, sourceRe, filterRe, correlate: opts.correlate });
 
     // ── Emit ────────────────────────────────────────────────────────────────
     console.error(`# ${notes.join(' | ')} → ${merged.length} entries`);
-    if (opts.pretty) {
-      for (const e of merged) console.log(formatPretty(e));
-    } else {
-      for (const e of merged) {
-        if (opts.raw) {
-          console.log(JSON.stringify(e));
-        } else {
-          const rest = { ...e };
-          delete rest.raw;
-          console.log(JSON.stringify(rest));
-        }
-      }
-    }
+    emitRows(merged, opts);
   });
 
   program.addCommand(cmd);
+}
+
+export async function readFollowBridgeBatch(
+  client: FollowBridgeClient,
+  state: LogsFollowState,
+  options: ReadFollowBridgeBatchOptions = {},
+): Promise<MergedLogEntry[]> {
+  const warn = options.warn ?? console.error;
+  if (state.drainFallback) {
+    const entries = await client.fetchLogs(options.intervalMs ?? 2000);
+    return asEntries(entries).map(normalizeRustLog);
+  }
+
+  const response = await client.fetchLogs({
+    cursor: state.cursor,
+    waitMs: options.waitMs ?? 10_000,
+    limit: options.limit ?? 1000,
+    timeoutMs: (options.waitMs ?? 10_000) + 1000,
+  });
+  const envelope = asEnvelope(response);
+  if (envelope.cursor === undefined) {
+    state.drainFallback = true;
+    if (!state.warnedDrainFallback) {
+      state.warnedDrainFallback = true;
+      warn(`note: ${LOG_CURSOR_UNAVAILABLE_NOTE}`);
+    }
+    return envelope.entries.map(normalizeRustLog);
+  }
+
+  state.cursor = envelope.cursor;
+  if ((envelope.dropped ?? 0) > 0) {
+    warn(`warning: bridge log cursor dropped ${envelope.dropped} evicted entrie(s)`);
+  }
+  return envelope.entries.map(normalizeRustLog);
+}
+
+async function followBridgeLogs(
+  opts: LogsOpts,
+  minLevel: OsLogLevel | null,
+  sourceRe: RegExp | null,
+  filterRe: RegExp | null,
+): Promise<void> {
+  const cfg = await tryResolveBridgeConfig(opts);
+  if (!cfg) {
+    throw new Error(
+      'logs --follow needs a live bridge. Pass --port/--token or start the app with the dev bridge.',
+    );
+  }
+  const client = new BridgeClient(cfg, opts.windowLabel);
+  const state: LogsFollowState = {
+    cursor: 0,
+    drainFallback: false,
+    warnedDrainFallback: false,
+  };
+  let stopped = false;
+  const stop = (): void => {
+    stopped = true;
+  };
+  process.once('SIGINT', stop);
+  try {
+    while (!stopped) {
+      const batch = await readFollowBridgeBatch(client, state, {
+        intervalMs: normalizeInterval(opts.interval),
+      });
+      const rows = prepareEntries(batch, { minLevel, sourceRe, filterRe, correlate: opts.correlate });
+      emitRows(rows, opts);
+      if (state.drainFallback) await delay(normalizeInterval(opts.interval));
+    }
+  } finally {
+    process.off('SIGINT', stop);
+  }
+}
+
+function prepareEntries(
+  entries: MergedLogEntry[],
+  options: {
+    minLevel: OsLogLevel | null;
+    sourceRe: RegExp | null;
+    filterRe: RegExp | null;
+    correlate?: boolean;
+  },
+): MergedLogEntry[] {
+  let merged = entries.filter((e) => {
+    if (options.minLevel && LEVEL_RANK[e.level] < LEVEL_RANK[options.minLevel]) return false;
+    if (options.sourceRe && !options.sourceRe.test(e.source)) return false;
+    if (options.filterRe && !options.filterRe.test(e.message)) return false;
+    return true;
+  });
+  if (options.correlate) {
+    merged = merged.map((e) => {
+      const correlation = inferCorrelation(e.message);
+      return correlation ? { ...e, correlation } : e;
+    });
+  }
+  return merged;
+}
+
+function emitRows(entries: MergedLogEntry[], opts: Pick<LogsOpts, 'pretty' | 'raw'>): void {
+  if (opts.pretty) {
+    for (const e of entries) console.log(formatPretty(e));
+    return;
+  }
+  for (const e of entries) {
+    if (opts.raw) {
+      console.log(JSON.stringify(e));
+    } else {
+      const rest = { ...e };
+      delete rest.raw;
+      console.log(JSON.stringify(rest));
+    }
+  }
+}
+
+function asEnvelope(
+  response: RustLogEntry[] | { entries: RustLogEntry[]; cursor?: number; dropped?: number },
+): { entries: RustLogEntry[]; cursor?: number; dropped?: number } {
+  return Array.isArray(response) ? { entries: response } : response;
+}
+
+function asEntries(
+  response: RustLogEntry[] | { entries: RustLogEntry[]; cursor?: number; dropped?: number },
+): RustLogEntry[] {
+  return Array.isArray(response) ? response : response.entries;
+}
+
+function normalizeInterval(value: number): number {
+  if (!Number.isFinite(value)) return 2000;
+  return Math.max(100, Math.trunc(value));
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolveDelay) => setTimeout(resolveDelay, ms));
 }
 
 async function resolveFiles(opts: LogsOpts, notes: string[]): Promise<string[]> {
