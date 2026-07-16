@@ -1,9 +1,10 @@
 import { Command } from 'commander';
 import { spawn } from 'node:child_process';
-import { mkdir, writeFile, readFile, readdir, stat } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { addBridgeOptions, type BridgeOpts } from './shared.js';
 import { exec } from '../util/exec.js';
+import { redactDir } from '../util/redactText.js';
 
 interface BundleOpts extends BridgeOpts {
   config?: string;
@@ -85,7 +86,11 @@ export function registerBundle(program: Command): void {
 
     // ── Redact obvious secrets across all collected text files ──────────────
     const redacted = await redactDir(outDir);
-    outcomes.push({ phase: 'redact', ok: true, detail: `redacted ${redacted} value(s)` });
+    outcomes.push({
+      phase: 'redact',
+      ok: redacted.failures.length === 0,
+      detail: `redacted ${redacted.redactions} value(s), ${redacted.warnings.length} warning(s), ${redacted.failures.length} failure(s)`,
+    });
 
     // ── Summary ─────────────────────────────────────────────────────────────
     const summary = {
@@ -206,51 +211,6 @@ function runToDir(phase: string, args: string[]): Promise<PhaseOutcome> {
   });
 }
 
-const REDACT_PATTERNS: Array<[RegExp, string]> = [
-  [/("token"\s*:\s*")[^"]+(")/gi, '$1***$2'],
-  [/\btoken=([\w.-]+)/gi, 'token=***'],
-  [/("(?:authorization|api[_-]?key|secret|password)"\s*:\s*")[^"]+(")/gi, '$1***$2'],
-];
-
-/** Walk the bundle dir and redact obvious secrets from text files. Returns count of redactions. */
-async function redactDir(dir: string): Promise<number> {
-  let total = 0;
-  const entries = await readdir(dir).catch(() => [] as string[]);
-  for (const name of entries) {
-    const full = join(dir, name);
-    const st = await stat(full).catch(() => null);
-    if (!st) continue;
-    if (st.isDirectory()) {
-      total += await redactDir(full);
-      continue;
-    }
-    if (!/\.(json|ndjson|txt|md|log)$/i.test(name)) continue;
-    let content: string;
-    try {
-      content = await readFile(full, 'utf-8');
-    } catch {
-      continue;
-    }
-    let changed = false;
-    for (const [re, repl] of REDACT_PATTERNS) {
-      const next = content.replace(re, (...a) => {
-        total += 1;
-        return interpolate(repl, a);
-      });
-      if (next !== content) {
-        content = next;
-        changed = true;
-      }
-    }
-    if (changed) await writeFile(full, content).catch(() => {});
-  }
-  return total;
-}
-
-function interpolate(template: string, matchArgs: unknown[]): string {
-  return template.replace(/\$(\d)/g, (_, d: string) => String(matchArgs[Number(d)] ?? ''));
-}
-
 function renderSummary(outDir: string, outcomes: PhaseOutcome[]): string {
   const rows = outcomes.map((o) => `- ${o.ok ? '✓' : '✗'} **${o.phase}** — ${o.detail}`).join('\n');
   return `# Incident bundle
@@ -271,7 +231,9 @@ ${rows}
 
 ## Notes
 
-Secrets (\`token\`, \`api_key\`, \`password\`, …) were redacted from text artifacts on write.
+Secrets (\`token\`, \`api_key\`, \`password\`, JWTs, AWS keys, …) and PII (emails, IPs,
+phone numbers, home paths) were redacted from text artifacts on write. Images are
+not redacted and are flagged as warnings in the redact phase.
 Re-run any individual command directly for live/interactive inspection.
 `;
 }
