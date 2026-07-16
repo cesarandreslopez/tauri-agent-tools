@@ -60,8 +60,10 @@ export function registerSidecarTap(program: Command): void {
 
       let envelopesEmitted = 0;
       let invalidCount = 0;
+      let processing = Promise.resolve();
+      let processingError: unknown = null;
 
-      child.stdout.on('data', async (chunk: string) => {
+      const processChunk = async (chunk: string): Promise<void> => {
         const lines = framer.push(chunk);
         for (const line of lines) {
           if (line.length === 0) continue;
@@ -69,6 +71,13 @@ export function registerSidecarTap(program: Command): void {
           envelopesEmitted++;
           if (!validator.parse(line).ok) invalidCount++;
         }
+      };
+
+      child.stdout.on('data', (chunk: string) => {
+        processing = processing.then(() => processChunk(chunk)).catch((err: unknown) => {
+          processingError = err;
+          child.kill();
+        });
       });
 
       let stderrBuf = '';
@@ -87,13 +96,20 @@ export function registerSidecarTap(program: Command): void {
           }
           reject(err);
         });
-        child.on('close', async (code) => {
-          const trailing = framer.flush();
-          if (trailing) {
-            await processLine(trailing, validator, opts);
-            envelopesEmitted++;
-          }
-          resolve(code ?? 0);
+        child.on('close', (code) => {
+          void (async () => {
+            await processing;
+            if (processingError != null) {
+              reject(processingError);
+              return;
+            }
+            const trailing = framer.flush();
+            if (trailing) {
+              await processLine(trailing, validator, opts);
+              envelopesEmitted++;
+            }
+            resolve(code ?? 0);
+          })().catch(reject);
         });
       });
 

@@ -97,6 +97,40 @@ describe('sidecar tap command (e2e)', () => {
     expect(stdout).toContain('not valid json');
   });
 
+  it('keeps envelopes complete and ordered under bursty output', async () => {
+    // Emits many lines in odd-sized chunks so lines split across chunk
+    // boundaries and multiple data events are in flight back-to-back.
+    const BURSTY_SIDECAR = `
+const total = 500;
+let out = '';
+for (let i = 0; i < total; i++) {
+  out += JSON.stringify({ ts: 1700000000 + i, level: 'info', msg: 'm' + i }) + '\\n';
+}
+const CHUNK = 1013;
+for (let off = 0; off < out.length; off += CHUNK) {
+  process.stdout.write(out.slice(off, off + CHUNK));
+}
+`;
+    const sidecar = writeFake('bursty-fake.mjs', BURSTY_SIDECAR);
+    const recordPath = join(workspace, 'bursty-recording.ndjson');
+    const { stdout, stderr } = await execFileP('node', [
+      CLI, 'sidecar', 'tap', '--record', recordPath, '--', 'node', sidecar,
+    ]);
+
+    const envelopes = stdout.trim().split('\n').map((l) => JSON.parse(l));
+    expect(envelopes).toHaveLength(500);
+    envelopes.forEach((e, i) => {
+      expect(e.payload).toMatchObject({ msg: `m${i}` });
+    });
+    expect(stderr).toContain('envelopes=500');
+    expect(stderr).toContain('invalid=0');
+
+    const recorded = readFileSync(recordPath, 'utf-8').trim().split('\n');
+    expect(recorded).toHaveLength(500);
+    expect(JSON.parse(recorded[0]!).msg).toBe('m0');
+    expect(JSON.parse(recorded[499]!).msg).toBe('m499');
+  });
+
   it('exits non-zero when the sidecar exec is missing', async () => {
     await expect(
       execFileP('node', [CLI, 'sidecar', 'tap', '--', 'nonexistent-binary-zzzz']),
