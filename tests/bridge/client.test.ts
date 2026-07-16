@@ -36,7 +36,13 @@ function handleRequest(req: IncomingMessage, res: ServerResponse): void {
     // Handle /logs endpoint
     if (req.url === '/logs') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ entries: SAMPLE_LOG_ENTRIES }));
+      res.end(
+        JSON.stringify(
+          data.cursor === undefined
+            ? { entries: SAMPLE_LOG_ENTRIES }
+            : { entries: SAMPLE_LOG_ENTRIES, cursor: 2, dropped: 1 },
+        ),
+      );
       return;
     }
 
@@ -163,6 +169,58 @@ describe('BridgeClient', () => {
       await expect(client('wrong-token').fetchLogs()).rejects.toThrow(
         'Bridge authentication failed',
       );
+    });
+
+    it('requests cursor mode and returns cursor metadata when the bridge supports it', async () => {
+      const result = await client().fetchLogs({
+        cursor: 0,
+        waitMs: 250,
+        limit: 2,
+        timeoutMs: 1500,
+      });
+
+      expect(result).toEqual({
+        entries: SAMPLE_LOG_ENTRIES,
+        cursor: 2,
+        dropped: 1,
+      });
+      expect(lastRequestBody).toMatchObject({
+        token: TEST_TOKEN,
+        cursor: 0,
+        waitMs: 250,
+        limit: 2,
+      });
+    });
+
+    it('returns an undefined cursor for v0.7 drain responses to cursor requests', async () => {
+      const drainServer = createServer((req, res) => {
+        let body = '';
+        req.on('data', (chunk: Buffer) => {
+          body += chunk.toString();
+        });
+        req.on('end', () => {
+          const data = JSON.parse(body) as Record<string, unknown>;
+          expect(data.cursor).toBe(10);
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ entries: SAMPLE_LOG_ENTRIES }));
+        });
+      });
+      const drainPort = await new Promise<number>((resolve) => {
+        drainServer.listen(0, '127.0.0.1', () => {
+          resolve((drainServer.address() as AddressInfo).port);
+        });
+      });
+
+      try {
+        const drainClient = new BridgeClient({ port: drainPort, token: TEST_TOKEN });
+        await expect(drainClient.fetchLogs({ cursor: 10 })).resolves.toEqual({
+          entries: SAMPLE_LOG_ENTRIES,
+          cursor: undefined,
+          dropped: undefined,
+        });
+      } finally {
+        await new Promise<void>((resolve) => drainServer.close(() => resolve()));
+      }
     });
 
     it('throws "update your bridge" on 404', async () => {

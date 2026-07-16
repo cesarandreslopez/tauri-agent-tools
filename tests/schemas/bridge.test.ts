@@ -82,7 +82,19 @@ describe('RustLogLevelSchema', () => {
 describe('RustLogEntrySchema', () => {
   it('accepts valid log entry', () => {
     const entry = {
+      id: 42,
       timestamp: Date.now(),
+      level: 'info',
+      target: 'app',
+      message: 'hello',
+      source: 'rust',
+    };
+    expect(RustLogEntrySchema.parse(entry)).toEqual(entry);
+  });
+
+  it('accepts a pre-v0.8 entry without an id', () => {
+    const entry = {
+      timestamp: 1000,
       level: 'info',
       target: 'app',
       message: 'hello',
@@ -104,8 +116,10 @@ describe('BridgeLogsResponseSchema', () => {
   it('accepts valid logs response', () => {
     const data = {
       entries: [{
-        timestamp: 1000, level: 'info', target: 'app', message: 'ok', source: 'rust',
+        id: 7, timestamp: 1000, level: 'info', target: 'app', message: 'ok', source: 'rust',
       }],
+      cursor: 7,
+      dropped: 0,
     };
     expect(BridgeLogsResponseSchema.parse(data)).toEqual(data);
   });

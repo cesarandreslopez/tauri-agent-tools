@@ -35,6 +35,23 @@ const ENDPOINT_MIN_VERSION: Record<string, string> = {
   '/devtools': '0.7.0',
   '/health': '0.7.0',
 };
+// The v0.8 cursor capability lives on /logs, a base endpoint served by every
+// bridge version, so it has no entry above. Clients feature-detect it by
+// response shape instead: a cursor-mode request answered by an older bridge
+// comes back without a `cursor` field (see fetchLogs).
+
+interface FetchLogsOptions {
+  cursor?: number;
+  waitMs?: number;
+  limit?: number;
+  timeoutMs?: number;
+}
+
+interface FetchLogsCursorResponse {
+  entries: RustLogEntry[];
+  cursor?: number;
+  dropped?: number;
+}
 
 export class BridgeClient {
   private baseUrl: string;
@@ -164,11 +181,22 @@ export class BridgeClient {
     return A11yNodeSchema.parse(JSON.parse(String(result)));
   }
 
-  async fetchLogs(timeout = 5000): Promise<RustLogEntry[]> {
+  async fetchLogs(timeout?: number): Promise<RustLogEntry[]>;
+  async fetchLogs(opts: FetchLogsOptions): Promise<FetchLogsCursorResponse>;
+  async fetchLogs(
+    arg: number | FetchLogsOptions = 5000,
+  ): Promise<RustLogEntry[] | FetchLogsCursorResponse> {
+    const opts = typeof arg === 'number' ? undefined : arg;
+    const timeout = typeof arg === 'number' ? arg : arg.timeoutMs ?? 5000;
+    const body: Record<string, unknown> = { token: this.token };
+    if (opts?.cursor !== undefined) body.cursor = opts.cursor;
+    if (opts?.waitMs !== undefined) body.waitMs = opts.waitMs;
+    if (opts?.limit !== undefined) body.limit = opts.limit;
+
     const res = await fetch(`${this.baseUrl}/logs`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token: this.token }),
+      body: JSON.stringify(body),
       signal: AbortSignal.timeout(timeout),
     });
 
@@ -186,6 +214,13 @@ export class BridgeClient {
     }
 
     const data = BridgeLogsResponseSchema.parse(await res.json());
+    if (opts !== undefined) {
+      return {
+        entries: data.entries,
+        cursor: data.cursor,
+        dropped: data.dropped,
+      };
+    }
     return data.entries;
   }
 

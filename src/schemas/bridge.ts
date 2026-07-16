@@ -35,6 +35,7 @@ export const RustLogLevelSchema = z.enum(['trace', 'debug', 'info', 'warn', 'err
 export type RustLogLevel = z.infer<typeof RustLogLevelSchema>;
 
 export const RustLogEntrySchema = z.object({
+  id: z.number().int().nonnegative().optional(),
   timestamp: z.number(),
   level: RustLogLevelSchema,
   target: z.string(),
@@ -51,6 +52,8 @@ export const BridgeEvalResponseSchema = z.object({
 
 export const BridgeLogsResponseSchema = z.object({
   entries: z.array(RustLogEntrySchema),
+  cursor: z.number().int().nonnegative().optional(),
+  dropped: z.number().int().nonnegative().optional(),
 });
 
 // === Probe / Discovery Responses ===
