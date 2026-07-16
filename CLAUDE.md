@@ -41,6 +41,7 @@ npx vitest run tests/commands/screenshot.test.ts
 | `src/util/magick.ts` | `magickCommand()`, `detectMagickVersion()` — ImageMagick v6/v7 version detection and command resolution |
 | `src/util/exec.ts` | `exec()` wrapper around `execFile()`, `validateWindowId()` |
 | `src/util/logMerge.ts` | `parseLogLine()`, `normalizeRustLog()`, `inferCorrelation()` — log parsing/normalization for the `logs` command |
+| `src/util/redactText.ts` | `redactText()`, `redactJson()`, `redactDir()`, `scanResidualSecrets()` — secrets/PII redaction for shared artifacts (`bundle`) |
 | `src/util/mergeByTimestamp.ts` | `mergeByTimestamp()` — stable merge of timestamped streams into one UTC-ordered timeline |
 | `src/util/psTree.ts` | `snapshotProcesses()`, `buildDescendantTree()` — OS process-tree walk for `process-tree --deep` / `bundle` |
 | `examples/tauri-bridge/src/dev_bridge.rs` | Reference Rust bridge (~440 lines) — not part of build |
@@ -122,6 +123,7 @@ Dependencies flow strictly downward. Enforced by `scripts/check-imports.mjs`.
 npx tsc --noEmit                              # Type check
 npm test                                      # All tests (749+ tests, 63 files)
 node scripts/check-imports.mjs                # Import DAG linter
+node scripts/check-bridge-parity.mjs          # Bridge endpoint/min-version parity (also part of npm run lint)
 npx madge --circular --extensions ts,tsx src/  # Circular dependency check
 ```
 

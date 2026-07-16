@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Fork-uplift release: bug fixes and features generalized from the `contextful_debugger` fork. Everything is additive and backwards-compatible; schema additions are optional-only, and the bridge protocol change is opt-in by request shape.
+
+### Added
+
+- **`logs --follow`** (+ `--interval <ms>`) — tail live bridge logs until interrupted. Against a v0.8 bridge this uses non-draining cursor long-polls (seeded at cursor 0 to replay the buffered backlog) so multiple log consumers can coexist; evicted entries surface as a `dropped`-count warning. Against a pre-0.8 bridge it emits a one-time `note:` and degrades to drain polling every `--interval` ms.
+- **`sidecar replay --tap-format` / `--dir in|out`** — unwrap `{dir,ts,line}` tap wrapper rows (the common shape for bidirectional IPC tap recordings) before replaying, optionally filtered by direction. Malformed wrapper rows fail with a line-numbered error.
+- **`captureToDir()` library API** — `capture`'s pipeline is now an exported function (`src/commands/capture.ts`) returning the `CaptureManifest`, so other tooling can snapshot evidence programmatically. CLI behavior unchanged.
+- **`scripts/check-bridge-parity.mjs`** (npm `check:bridge-parity`, part of `npm run lint`) — lint gate that regex-parses `BRIDGE_VERSION` + the endpoint list from `dev_bridge.rs` and `ENDPOINT_MIN_VERSION` from `client.ts`, failing on missing/extra entries or a min-version above `BRIDGE_VERSION` (semver compare, so legacy entries survive protocol bumps).
+
+### Changed
+
+- **Stronger artifact redaction** — `bundle` now redacts via the shared `src/util/redactText.ts` engine: Bearer/JWT/query-param/env-var secrets, AWS keys, emails, IPs, phone numbers, and home paths (including base64-encoded ones); `.json`/`.ndjson` artifacts are re-serialized so they stay parseable after masking. The redact phase reports `{redactions, warnings, failures}`, fails on write-back failures, and flags unredacted images as warnings. A `scanResidualSecrets()` helper (known token prefixes + Shannon-entropy gate with a configurable artifact-name allowlist) is available for downstream gates.
+- **`probe` reports instead of throwing when no bridge exists** — with nothing discoverable and no explicit `--port`/`--token`/`--pid`, probe now emits a complete result (JSON and human forms) with `target.alive=false` and an actionable `note`, so agents can branch on structured output.
+
+### Changed — Rust dev bridge (re-copy recommended, drop-in)
+
+- `BRIDGE_VERSION` bumped from `"0.7.0"` to `"0.8.0"`.
+- **Cursor-mode `/logs`**: a request carrying `{cursor, waitMs ≤ 25000, limit 1..1000}` returns `{entries, cursor, dropped}` **without draining** the ring buffer; requests with `waitMs > 0` long-poll on a worker thread (the accept loop is serial). `LogEntry` gains a monotonic `id`. Bare `{token}` requests keep the legacy drain semantics unchanged, so pre-0.8 CLIs are unaffected.
+- **Integrators can re-copy `examples/tauri-bridge/src/dev_bridge.rs` as a drop-in** — no `main.rs` signature changes this time. Without the re-copy, `logs --follow` degrades gracefully to drain polling.
+
+### Fixed
+
+- **Bridge discovery now prefers the newest live bridge.** Token files are sorted by mtime (newest first, filename tie-break) instead of readdir order, so running several bridge-enabled apps no longer attaches the CLI to a stale instance.
+- **`sidecar tap` no longer drops or reorders envelopes under bursty output.** Async chunk handling is serialized through a promise chain and `close` waits for it to drain before flushing the trailing line.
+
 ## [0.8.0] - 2026-06-19
 
 Real-world observability hardening. Everything in this release is **additive and backwards-compatible**: no command was removed or renamed, no flag changed meaning, no default output changed, and all schema additions are optional-only. The existing test suite passes unchanged; new behavior is opt-in or only affects paths that previously errored.

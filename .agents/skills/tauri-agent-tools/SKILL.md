@@ -161,6 +161,12 @@ tauri-agent-tools logs --identifier com.example.app --no-bridge
 # Point at explicit files / a custom dir; filter + infer correlation ids (run_id, requestId…)
 tauri-agent-tools logs --log-dir ~/Library/Logs/com.example.app --level warn --correlate
 tauri-agent-tools logs --log-file /path/a.log --log-file /path/b.log --filter "block_id=42"
+
+# Follow live bridge logs until Ctrl-C (v0.8 bridge: non-draining cursor reads,
+# safe to run alongside other log consumers). Against a pre-0.8 bridge it emits
+# a one-time note and degrades to drain polling every --interval ms.
+tauri-agent-tools logs --follow --level warn
+tauri-agent-tools logs --follow --interval 1000 --pretty
 ```
 
 Each entry is `{ts, level, source, subsystem, message, origin}` (+ `correlation` with `--correlate`). `source` is `rust` / `sidecar:<name>` (bridge) or `file:<basename>` (disk). Timezone-less timestamps are read as UTC so ordering is host-independent.
@@ -229,7 +235,9 @@ tauri-agent-tools forensics --config ./src-tauri -o ./forensics-out
 tauri-agent-tools bundle --config ./src-tauri -o ./triage
 # → ./triage/{logs.ndjson,process-tree.json,app-paths.json,forensics/,summary.md} + ./triage.tar.gz
 tauri-agent-tools bundle --config ./src-tauri --with-capture -o ./triage   # also screenshot + DOM (needs bridge)
-# Secrets (token/api_key/password/…) are redacted from text artifacts on write.
+# Secrets (token/api_key/password/JWTs/AWS keys/…) and PII (emails, IPs, phone
+# numbers, home paths) are redacted from text artifacts on write; unredacted
+# images are flagged as warnings in the redact phase.
 ```
 
 ### Watch DOM mutations
@@ -353,9 +361,9 @@ tauri-agent-tools eval "document.title" --window-label overlay --json
 | `config inspect` | `--config <path>`, `--capabilities-dir <path>`, `--cargo-toml <path>`, `--json` | no | Structured `tauri.conf.json` snapshot + capability audit |
 | `os-logs` | `--identifier <id>`, `--level <lvl>`, `--source <src>`, `--since <dur>`, `--duration <ms>`, `--json` | no | Tail host OS log stream filtered to a Tauri bundle id |
 | `sidecar tap` | `-- <cmd...>`, `--schema <path>`, `--record <path>`, `--raw`, `--json` | no | Wrap-and-run a sidecar, frame NDJSON, validate envelopes |
-| `sidecar replay` | `<file>`, `--to-exec <cmd>`, `--rate <lps>`, `--loop` | no | Replay a recorded NDJSON sidecar stream |
+| `sidecar replay` | `<file>`, `--to-exec <cmd>`, `--rate <lps>`, `--loop`, `--tap-format`, `--dir in\|out` | no | Replay a recorded NDJSON sidecar stream; `--tap-format` unwraps `{dir,ts,line}` tap wrapper rows |
 | `forensics` | `--config <path>`, `--identifier <id>`, `-o <dir>`, `--since <dur>`, `--json` | no | One-shot forensic bundle (works on dead apps) |
-| `logs` | `--config <path>`, `--identifier <id>`, `--log-dir <path>`, `--log-file <path>`, `--level <lvl>`, `--source <re>`, `--filter <re>`, `--correlate`, `--no-bridge`, `--pretty` | optional | Merge on-disk log files + bridge ring buffer into one timestamp-ordered stream |
+| `logs` | `--config <path>`, `--identifier <id>`, `--log-dir <path>`, `--log-file <path>`, `--level <lvl>`, `--source <re>`, `--filter <re>`, `--correlate`, `--follow`, `--interval <ms>`, `--no-bridge`, `--pretty` | optional | Merge on-disk log files + bridge ring buffer into one timestamp-ordered stream; `--follow` tails the bridge via v0.8 cursor reads (drain-polling fallback on older bridges) |
 | `process-tree` | `--deep`, `--pid <n>`, `--json` | optional | Tauri PID + sidecars (bridge /process); `--deep` walks the full OS descendant tree without the bridge |
 | `capabilities audit` | `--json` | yes (v0.7+) | Live Devtron-style audit of declared Tauri capabilities |
 | `webview attach` | `--print-url`, `--open`, `--json` | yes (v0.7+) | Print webview inspector URL or platform hint |

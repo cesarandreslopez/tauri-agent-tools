@@ -11,6 +11,10 @@ Add the dev bridge to a Tauri app so `tauri-agent-tools` can inspect DOM, evalua
 
 The bridge runs **only in debug builds** and is stripped from release builds automatically.
 
+## Re-copying for v0.8 (optional enrichment — not required)
+
+> **Upgrading from v0.7:** Bridge v0.8 adds cursor-mode `/logs` reads (non-draining, long-polling) that power `logs --follow` and let multiple log consumers coexist. It is a **drop-in re-copy** of `dev_bridge.rs` — no `main.rs` changes this time. Without it, `logs --follow` emits a one-time note and degrades to drain polling.
+
 ## Re-copying for v0.7 (optional enrichment — not required)
 
 > **Upgrading from v0.6:** The bridge surface grew with four new endpoints (`/process`, `/capabilities`, `/devtools`, `/health`) and `start_bridge` now returns a third tuple element (the sidecar registry). These are **optional enrichment**: as of CLI v0.8 the commands that use them (`process-tree`, `capabilities audit`, `webview attach`, `health`) feature-detect via `GET /version` and **degrade gracefully** against an older/vendored bridge — they emit a clear `note:` (and fall back to an OS/eval path where possible) instead of failing. So you are **not forced to re-sync** `dev_bridge.rs` just to keep using the CLI. To unlock the richer structured output, **re-copy `dev_bridge.rs` from the latest `examples/tauri-bridge/src/dev_bridge.rs`** and adjust your `main.rs` to destructure the new return shape (Step 3). Pass `--strict` to any of those commands to turn a missing endpoint back into a hard error.
@@ -22,7 +26,7 @@ The bridge exposes eight HTTP endpoints on a random localhost port:
 | Endpoint | Method | Auth | Purpose |
 |----------|--------|------|---------|
 | `/eval` | POST | token | Evaluate JS in a webview (supports `window` param for multi-window) |
-| `/logs` | POST | token | Drain Rust tracing logs and sidecar output |
+| `/logs` | POST | token | Rust tracing logs and sidecar output — bare `{token}` drains; `{cursor, waitMs, limit}` (**v0.8+**) reads without draining so multiple consumers can tail (powers `logs --follow`) |
 | `/describe` | POST | token | Report PID, window labels, and capabilities |
 | `/version` | GET | none | Bridge version and available endpoints (used for feature detection) |
 | `/process` | POST | token | Tauri PID + registered sidecars (powers `process-tree`) — **v0.7+** |
