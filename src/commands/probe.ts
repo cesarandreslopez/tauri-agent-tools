@@ -1,7 +1,8 @@
 import { Command } from 'commander';
 import type { DisplayServer } from '../types.js';
 import { detectDisplayServer } from '../platform/detect.js';
-import { addBridgeOptions, resolveBridge } from './shared.js';
+import { BridgeClient } from '../bridge/client.js';
+import { addBridgeOptions, resolveBridge, tryResolveBridgeConfig } from './shared.js';
 import type { BridgeOpts } from './shared.js';
 import { discoverBridgesByPid, discoverBridge } from '../bridge/tokenDiscovery.js';
 import type { DescribeResponse, VersionResponse } from '../schemas/bridge.js';
@@ -17,6 +18,7 @@ interface TargetInfo {
   version: VersionResponse | null;
   describe: DescribeResponse | null;
   page: PageInfo;
+  note?: string;
 }
 
 interface ProbeResult {
@@ -40,19 +42,65 @@ export function registerProbe(program: Command): void {
       port: cfg.port,
     }));
 
-    // 2. Resolve specific bridge (may throw if none found)
-    const bridge = await resolveBridge(opts);
+    // 2. Detect platform early so the no-bridge path can still emit a full result.
+    const platform = detectDisplayServer();
 
-    // 3. Ping
+    const hasExplicitTarget =
+      opts.port !== undefined || opts.token !== undefined || opts.pid !== undefined;
+
+    // 3. Resolve specific bridge (may throw if none found)
+    let bridge: BridgeClient;
+    if (!hasExplicitTarget && allBridges.length === 0) {
+      const config = await tryResolveBridgeConfig(opts);
+      if (config === null) {
+        const note =
+          'Start the Tauri dev app with the dev bridge enabled, or pass --port and --token.';
+        const result: ProbeResult = {
+          bridges: allBridges,
+          target: {
+            alive: false,
+            version: null,
+            describe: null,
+            page: { url: null, title: null, viewport: null },
+            note,
+          },
+          platform,
+        };
+
+        if (opts.json) {
+          console.log(JSON.stringify(result, null, 2));
+          return;
+        }
+
+        console.log('=== Tauri Bridge Probe ===');
+        console.log('');
+        console.log('Running bridges:  none');
+        console.log('');
+        console.log(`Platform:         ${platform}`);
+        console.log('Bridge alive:     no');
+        console.log(`Note:             ${note}`);
+        console.log('');
+        console.log('Page:');
+        console.log('  URL:      (unavailable)');
+        console.log('  Title:    (unavailable)');
+        console.log('  Viewport: (unavailable)');
+        return;
+      }
+      bridge = new BridgeClient(config, opts.windowLabel);
+    } else {
+      bridge = await resolveBridge(opts);
+    }
+
+    // 4. Ping
     const alive = await bridge.ping();
 
-    // 4. Get version (graceful null on 404)
+    // 5. Get version (graceful null on 404)
     const versionInfo = await bridge.version();
 
-    // 5. Get describe (graceful null on 404)
+    // 6. Get describe (graceful null on 404)
     const describeInfo = await bridge.describe();
 
-    // 6. Get page info via eval (try/catch each independently)
+    // 7. Get page info via eval (try/catch each independently)
     let url: string | null = null;
     let title: string | null = null;
     let viewport: { width: number; height: number } | null = null;
@@ -74,9 +122,6 @@ export function registerProbe(program: Command): void {
     } catch {
       // ignore
     }
-
-    // 7. Detect platform
-    const platform = detectDisplayServer();
 
     // Determine the port for the target by checking opts or discovered bridge
     let targetPort = opts.port;

@@ -397,6 +397,35 @@ describe('probe command', () => {
     expect(output).toContain('Running bridges:  none');
   });
 
+  it('reports no bridge as structured JSON without explicit credentials', async () => {
+    const { discoverBridge, discoverBridgesByPid } = await import('../../src/bridge/tokenDiscovery.js');
+    vi.mocked(discoverBridgesByPid).mockResolvedValueOnce(new Map());
+    vi.mocked(discoverBridge).mockResolvedValueOnce(null);
+
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    const program = createProgram();
+    await program.parseAsync(['node', 'test', 'probe', '--json']);
+
+    expect(consoleSpy).toHaveBeenCalledOnce();
+    const output = consoleSpy.mock.calls[0]?.[0] as string;
+    const parsed = JSON.parse(output) as {
+      bridges: unknown[];
+      target: { alive: boolean; version: unknown; describe: unknown; page: unknown; note?: string };
+      platform: string;
+    };
+
+    expect(parsed.platform).toBe('darwin');
+    expect(parsed.bridges).toEqual([]);
+    expect(parsed.target).toMatchObject({
+      alive: false,
+      version: null,
+      describe: null,
+      page: { url: null, title: null, viewport: null },
+    });
+    expect(parsed.target.note).toMatch(/Start the Tauri dev app/i);
+  });
+
   it('includes bridge version info in human-readable output when available', async () => {
     const mockFetch = vi.fn().mockImplementation((url: string) => {
       if (url.endsWith('/version')) {
