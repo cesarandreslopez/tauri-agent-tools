@@ -1,5 +1,5 @@
 import { Command } from 'commander';
-import { addBridgeOptions, resolveBridge, parseEnum } from './shared.js';
+import { addBridgeOptions, resolveBridge, parseEnum, parseIntArg } from './shared.js';
 import { RustLogLevelSchema } from '../schemas/bridge.js';
 import type { RustLogEntry } from '../schemas/bridge.js';
 
@@ -43,8 +43,8 @@ export function registerRustLogs(program: Command): void {
     .option('--target <regex>', 'Filter by Rust module path (regex)')
     .option('--source <source>', 'Filter by source: rust, sidecar, all, or sidecar:<name>', 'all')
     .option('--filter <regex>', 'Filter messages by regex pattern')
-    .option('--interval <ms>', 'Poll interval in milliseconds', parseInt, 500)
-    .option('--duration <ms>', 'Auto-stop after N milliseconds', parseInt)
+    .option('--interval <ms>', 'Poll interval in milliseconds', parseIntArg, 500)
+    .option('--duration <ms>', 'Auto-stop after N milliseconds', parseIntArg)
     .option('--json', 'Output one JSON object per line');
 
   addBridgeOptions(cmd);

@@ -1,6 +1,6 @@
 import { Command } from 'commander';
 import type { PlatformAdapter } from '../types.js';
-import { addBridgeOptions, resolveBridge } from './shared.js';
+import { addBridgeOptions, resolveBridge, parseIntArg } from './shared.js';
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -15,8 +15,8 @@ export function registerWait(
     .option('-s, --selector <css>', 'Wait for CSS selector to match an element')
     .option('-e, --eval <js>', 'Wait for JS expression to be truthy')
     .option('-t, --title <regex>', 'Wait for window with title (no bridge needed)')
-    .option('--timeout <ms>', 'Maximum wait time in milliseconds', parseInt, 10000)
-    .option('--interval <ms>', 'Polling interval in milliseconds', parseInt, 500)
+    .option('--timeout <ms>', 'Maximum wait time in milliseconds', parseIntArg, 10000)
+    .option('--interval <ms>', 'Polling interval in milliseconds', parseIntArg, 500)
     .option('--json', 'Output structured JSON result')
     .addHelpText('after', `
 Examples:

@@ -1,7 +1,7 @@
 import { Command } from 'commander';
 import { readFile, readdir } from 'node:fs/promises';
 import { basename, join, resolve } from 'node:path';
-import { addBridgeOptions, tryResolveBridgeConfig } from './shared.js';
+import { addBridgeOptions, tryResolveBridgeConfig, parseIntArg } from './shared.js';
 import type { BridgeOpts } from './shared.js';
 import { BridgeClient } from '../bridge/client.js';
 import { resolveTauriProject, resolveTauriPaths, currentPlatform } from '../util/tauriConfig.js';
@@ -80,7 +80,7 @@ export function registerLogs(program: Command): void {
     .option('--filter <regex>', 'Filter messages by regex')
     .option('--correlate', 'Infer correlation ids (run_id, requestId, …) into a correlation field')
     .option('--follow', 'Follow live bridge logs until interrupted')
-    .option('--interval <ms>', 'Drain fallback polling interval for --follow', parseInt, 2000)
+    .option('--interval <ms>', 'Drain fallback polling interval for --follow', parseIntArg, 2000)
     .option('--raw', 'Include the raw source payload/line in NDJSON output')
     .option('--json', 'Emit NDJSON, one object per line (this is the default; accepted for consistency)')
     .option('--pretty', 'Human-readable output (overrides --json)');
@@ -153,7 +153,8 @@ export async function readFollowBridgeBatch(
 ): Promise<MergedLogEntry[]> {
   const warn = options.warn ?? console.error;
   if (state.drainFallback) {
-    const entries = await client.fetchLogs(options.intervalMs ?? 2000);
+    // The poll cadence may be sub-second; don't let it shrink the HTTP timeout.
+    const entries = await client.fetchLogs(Math.max(options.intervalMs ?? 2000, 2000));
     return asEntries(entries).map(normalizeRustLog);
   }
 

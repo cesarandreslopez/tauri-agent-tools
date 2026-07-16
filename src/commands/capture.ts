@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { Command } from 'commander';
 import type { PlatformAdapter } from '../types.js';
 import type { ImageFormat } from '../schemas/commands.js';
-import { addBridgeOptions, resolveBridge } from './shared.js';
+import { addBridgeOptions, resolveBridge, parseIntArg } from './shared.js';
 import type { BridgeOpts } from './shared.js';
 import { buildSerializerScript } from './dom.js';
 import { computeCropRect, cropImage } from '../util/image.js';
@@ -212,9 +212,9 @@ export function registerCapture(
     .requiredOption('-o, --output <dir>', 'Output directory path')
     .option('-s, --selector <css>', 'CSS selector to screenshot (full window if omitted)')
     .option('-t, --title <regex>', 'Window title to match (default: auto-discover)')
-    .option('--dom-depth <number>', 'DOM tree depth', parseInt, 3)
+    .option('--dom-depth <number>', 'DOM tree depth', parseIntArg, 3)
     .option('--eval <js>', 'Additional JS to eval and save')
-    .option('--logs-duration <ms>', 'Duration to wait for console errors (ms)', parseInt, 3000)
+    .option('--logs-duration <ms>', 'Duration to wait for console errors (ms)', parseIntArg, 3000)
     .option('--json', 'Output structured manifest');
 
   addBridgeOptions(cmd);

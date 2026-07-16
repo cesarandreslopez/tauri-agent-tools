@@ -1,6 +1,6 @@
 import { Command } from 'commander';
 import { z } from 'zod';
-import { addBridgeOptions, resolveBridge } from './shared.js';
+import { addBridgeOptions, resolveBridge, parseIntArg } from './shared.js';
 import type { BridgeClient } from '../bridge/client.js';
 import { IpcEntrySchema } from '../schemas/commands.js';
 import type { IpcEntry } from '../schemas/commands.js';
@@ -110,9 +110,9 @@ export function registerIpcMonitor(program: Command): void {
   const cmd = new Command('ipc-monitor')
     .description('Monitor Tauri IPC calls in real-time (read-only)')
     .option('--filter <command>', 'Only show specific IPC commands (supports * wildcards)')
-    .option('--interval <ms>', 'Poll interval in milliseconds', parseInt, 500)
-    .option('--duration <ms>', 'Auto-stop after N milliseconds', parseInt)
-    .option('--slow <ms>', 'Flag IPC calls that completed but took ≥ N ms', parseInt)
+    .option('--interval <ms>', 'Poll interval in milliseconds', parseIntArg, 500)
+    .option('--duration <ms>', 'Auto-stop after N milliseconds', parseIntArg)
+    .option('--slow <ms>', 'Flag IPC calls that completed but took ≥ N ms', parseIntArg)
     .option('--stats', 'Print a per-command latency summary on exit')
     .option('--json', 'Output one JSON object per line');
 

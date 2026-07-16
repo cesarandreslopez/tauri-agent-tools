@@ -1,6 +1,6 @@
 import { Command } from 'commander';
 import { z } from 'zod';
-import { addBridgeOptions, resolveBridge, parseEnum } from './shared.js';
+import { addBridgeOptions, resolveBridge, parseEnum, parseIntArg } from './shared.js';
 import type { BridgeClient } from '../bridge/client.js';
 import { ConsoleEntrySchema, ConsoleLevelSchema } from '../schemas/commands.js';
 import type { ConsoleEntry } from '../schemas/commands.js';
@@ -82,8 +82,8 @@ export function registerConsoleMonitor(program: Command): void {
     .description('Monitor console output (log/warn/error/info/debug) in real-time')
     .option('--level <level>', 'Filter by level (log, warn, error, info, debug)')
     .option('--filter <regex>', 'Filter messages by regex pattern')
-    .option('--interval <ms>', 'Poll interval in milliseconds', parseInt, 500)
-    .option('--duration <ms>', 'Auto-stop after N milliseconds', parseInt)
+    .option('--interval <ms>', 'Poll interval in milliseconds', parseIntArg, 500)
+    .option('--duration <ms>', 'Auto-stop after N milliseconds', parseIntArg)
     .option('--json', 'Output one JSON object per line');
 
   addBridgeOptions(cmd);

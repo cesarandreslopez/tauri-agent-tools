@@ -36,11 +36,20 @@ export function parseEnum<T extends [string, ...string[]]>(
   return result.data;
 }
 
+/**
+ * Base-10 integer coercion for commander options. Never pass bare `parseInt`
+ * as a coercion: commander calls it as (value, previousValue), so an option
+ * default becomes the radix — `--depth 12` with default 3 parsed as 5.
+ */
+export function parseIntArg(value: string): number {
+  return parseInt(value, 10);
+}
+
 export function addBridgeOptions(cmd: Command): Command {
   return cmd
-    .option('--port <number>', 'Bridge port (auto-discover if omitted)', parseInt)
+    .option('--port <number>', 'Bridge port (auto-discover if omitted)', parseIntArg)
     .option('--token <string>', 'Bridge token (auto-discover if omitted)')
-    .option('--pid <number>', 'Target app PID (auto-discover if omitted)', parseInt)
+    .option('--pid <number>', 'Target app PID (auto-discover if omitted)', parseIntArg)
     .option('--window-label <label>', 'Target window label (default: main)')
     .option(
       '--strict',

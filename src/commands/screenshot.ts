@@ -3,7 +3,7 @@ import { Command } from 'commander';
 import type { PlatformAdapter } from '../types.js';
 import { ImageFormatSchema } from '../schemas/commands.js';
 import type { ImageFormat } from '../schemas/commands.js';
-import { addBridgeOptions, resolveBridge } from './shared.js';
+import { addBridgeOptions, resolveBridge, parseIntArg } from './shared.js';
 import { computeCropRect, cropImage, resizeImage } from '../util/image.js';
 
 function autoOutputPath(format: ImageFormat): string {
@@ -21,7 +21,7 @@ export function registerScreenshot(
     .option('-t, --title <regex>', 'Window title to match (default: auto-discover from bridge)')
     .option('-o, --output <path>', 'Output file path (default: auto-named)')
     .option('--format <fmt>', 'Output format: png or jpg', 'png')
-    .option('--max-width <number>', 'Resize to max width', parseInt)
+    .option('--max-width <number>', 'Resize to max width', parseIntArg)
     .option('--json', 'Output structured JSON metadata')
     .addHelpText('after', `
 Examples:

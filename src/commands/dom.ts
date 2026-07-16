@@ -1,6 +1,6 @@
 import { Command } from 'commander';
 import { z } from 'zod';
-import { addBridgeOptions, resolveBridge, parseEnum } from './shared.js';
+import { addBridgeOptions, resolveBridge, parseEnum, parseIntArg } from './shared.js';
 import { DomNodeSchema } from '../schemas/dom.js';
 import type { DomNode, A11yNode } from '../schemas/dom.js';
 import { DomModeSchema } from '../schemas/commands.js';
@@ -124,7 +124,7 @@ export function registerDom(program: Command): void {
     .argument('[selector]', 'Root element to explore', 'body')
     .option('-s, --selector <css>', 'Root element to explore (alternative)')
     .option('--mode <mode>', 'Output mode: dom (default) or accessibility', 'dom')
-    .option('--depth <number>', 'Max child depth', parseInt, 3)
+    .option('--depth <number>', 'Max child depth', parseIntArg, 3)
     .option('--tree', 'Compact tree view (default)')
     .option('--styles', 'Include computed styles')
     .option('--text <pattern>', 'Find elements containing this text (case-insensitive)')

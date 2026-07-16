@@ -1,5 +1,5 @@
 import { Command } from 'commander';
-import { addBridgeOptions, resolveBridge } from './shared.js';
+import { addBridgeOptions, resolveBridge, parseIntArg } from './shared.js';
 import type { BridgeOpts } from './shared.js';
 import type { CheckItem } from '../schemas/commands.js';
 
@@ -56,7 +56,7 @@ export function registerCheck(program: Command): void {
     .option('--eval <js>', 'Assert that a JavaScript expression is truthy')
     .option('--text <pattern>', 'Assert that body text contains the pattern')
     .option('--no-errors', 'Assert that no console.error calls occurred during --duration')
-    .option('--duration <ms>', 'Duration to wait for --no-errors check (ms)', parseInt, 3000)
+    .option('--duration <ms>', 'Duration to wait for --no-errors check (ms)', parseIntArg, 3000)
     .option('--json', 'Output results as JSON');
 
   addBridgeOptions(cmd);

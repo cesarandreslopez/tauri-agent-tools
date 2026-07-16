@@ -1,5 +1,5 @@
 import { Command } from 'commander';
-import { resolveBridge } from '../shared.js';
+import { resolveBridge, parseIntArg } from '../shared.js';
 import type { BridgeClient } from '../../bridge/client.js';
 import { addInteractOptions, escapeSelector } from './shared.js';
 import { ClickResultSchema } from '../../schemas/interact.js';
@@ -82,7 +82,7 @@ export function registerClick(program: Command): void {
     .argument('<selector>', 'CSS selector of the element to click')
     .option('--double', 'Dispatch a double-click (dblclick) instead of a single click')
     .option('--right', 'Dispatch a right-click (contextmenu) instead of a left click')
-    .option('--wait <ms>', 'Wait up to <ms> milliseconds for element to appear', parseInt, 0)
+    .option('--wait <ms>', 'Wait up to <ms> milliseconds for element to appear', parseIntArg, 0)
     .addHelpText('after', `
 Examples:
   $ tauri-agent-tools click "button.submit"

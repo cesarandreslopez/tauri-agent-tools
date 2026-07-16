@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
+import { Command } from 'commander';
 import {
+  registerLogs,
   readFollowBridgeBatch,
   LOG_CURSOR_UNAVAILABLE_NOTE,
 } from '../../src/commands/logs.js';
@@ -142,10 +144,45 @@ describe('logs follow bridge batches', () => {
       limit: 1000,
       timeoutMs: 11000,
     });
-    expect(client.fetchLogs).toHaveBeenNthCalledWith(2, 25);
+    expect(client.fetchLogs).toHaveBeenNthCalledWith(2, 2000);
     expect(state.drainFallback).toBe(true);
     expect(
       warn.mock.calls.filter(([line]) => String(line).includes(LOG_CURSOR_UNAVAILABLE_NOTE)),
     ).toHaveLength(1);
+  });
+
+  it('uses a drain fetch timeout of at least 2s even for sub-second poll intervals', async () => {
+    const client = { fetchLogs: vi.fn(async () => [entry]) };
+    const state = { cursor: 0, drainFallback: true, warnedDrainFallback: true };
+
+    await readFollowBridgeBatch(client, state, { warn: vi.fn(), intervalMs: 5000 });
+    await readFollowBridgeBatch(client, state, { warn: vi.fn(), intervalMs: 100 });
+
+    expect(client.fetchLogs).toHaveBeenNthCalledWith(1, 5000);
+    expect(client.fetchLogs).toHaveBeenNthCalledWith(2, 2000);
+  });
+});
+
+describe('logs option parsing', () => {
+  it('parses --interval as base 10 instead of using the default as radix', () => {
+    const program = new Command();
+    registerLogs(program);
+    const cmd = program.commands.find((c) => c.name() === 'logs');
+    if (!cmd) throw new Error('logs command not registered');
+
+    cmd.parseOptions(['--interval', '1000']);
+
+    expect(cmd.opts().interval).toBe(1000);
+  });
+
+  it('keeps the 2000ms default when --interval is omitted', () => {
+    const program = new Command();
+    registerLogs(program);
+    const cmd = program.commands.find((c) => c.name() === 'logs');
+    if (!cmd) throw new Error('logs command not registered');
+
+    cmd.parseOptions([]);
+
+    expect(cmd.opts().interval).toBe(2000);
   });
 });

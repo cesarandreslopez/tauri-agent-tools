@@ -1,6 +1,6 @@
 import { Command } from 'commander';
 import { z } from 'zod';
-import { addBridgeOptions, resolveBridge } from './shared.js';
+import { addBridgeOptions, resolveBridge, parseIntArg } from './shared.js';
 import type { BridgeClient } from '../bridge/client.js';
 import { MutationEntrySchema } from '../schemas/commands.js';
 import type { MutationEntry } from '../schemas/commands.js';
@@ -97,8 +97,8 @@ export function registerMutations(program: Command): void {
     .description('Watch DOM mutations on a CSS selector (read-only)')
     .argument('<selector>', 'CSS selector of the element to observe')
     .option('--attributes', 'Also watch attribute changes')
-    .option('--interval <ms>', 'Poll interval in milliseconds', parseInt, 500)
-    .option('--duration <ms>', 'Auto-stop after N milliseconds', parseInt)
+    .option('--interval <ms>', 'Poll interval in milliseconds', parseIntArg, 500)
+    .option('--duration <ms>', 'Auto-stop after N milliseconds', parseIntArg)
     .option('--json', 'Output one JSON object per line');
 
   addBridgeOptions(cmd);

@@ -2,7 +2,7 @@ import { writeFile } from 'node:fs/promises';
 import { Command } from 'commander';
 import type { PlatformAdapter } from '../types.js';
 import type { ImageFormat } from '../schemas/commands.js';
-import { addBridgeOptions, resolveBridge } from './shared.js';
+import { addBridgeOptions, resolveBridge, parseIntArg } from './shared.js';
 import { buildSerializerScript } from './dom.js';
 import { computeCropRect, cropImage } from '../util/image.js';
 import type { BridgeClient } from '../bridge/client.js';
@@ -46,7 +46,7 @@ export function registerSnapshot(
     .requiredOption('-o, --output <prefix>', 'Output path prefix (e.g. /tmp/debug)')
     .option('-s, --selector <css>', 'CSS selector to screenshot (full window if omitted)')
     .option('-t, --title <regex>', 'Window title to match (default: auto-discover)')
-    .option('--dom-depth <number>', 'DOM tree depth', parseInt, 3)
+    .option('--dom-depth <number>', 'DOM tree depth', parseIntArg, 3)
     .option('--eval <js>', 'Additional JS to eval and save')
     .option('--json', 'Output structured manifest');
 

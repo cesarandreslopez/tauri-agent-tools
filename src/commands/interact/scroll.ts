@@ -1,5 +1,5 @@
 import { Command } from 'commander';
-import { resolveBridge } from '../shared.js';
+import { resolveBridge, parseIntArg } from '../shared.js';
 import type { BridgeOpts } from '../shared.js';
 import { addInteractOptions, escapeSelector } from './shared.js';
 import { ScrollResultSchema } from '../../schemas/interact.js';
@@ -84,8 +84,8 @@ export function registerScroll(program: Command): void {
   const cmd = new Command('scroll')
     .description('Scroll the page or a specific element')
     .option('-s, --selector <css>', 'CSS selector of the element to scroll')
-    .option('--by <px>', 'Scroll by N pixels (vertical)', parseInt)
-    .option('--to <px>', 'Scroll to absolute pixel position (vertical)', parseInt)
+    .option('--by <px>', 'Scroll by N pixels (vertical)', parseIntArg)
+    .option('--to <px>', 'Scroll to absolute pixel position (vertical)', parseIntArg)
     .option('--to-top', 'Scroll to top')
     .option('--to-bottom', 'Scroll to bottom')
     .option('--into-view', 'Scroll element into view (requires --selector)')
