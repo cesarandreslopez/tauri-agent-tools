@@ -100,8 +100,14 @@ const TEXT_PATTERNS: Array<{ re: RegExp; replacement: TextReplacement }> = [
     replacement: '[REDACTED_IP]',
   },
   {
+    // HH:MM:SS clock times (incl. inside ISO-8601 timestamps) share the
+    // colon-group shape, so only redact candidates that look like real IPv6:
+    // a `::`, a hex letter, or a group longer than 2 digits.
     re: /(?<![A-F0-9:])(?:[A-F0-9]{1,4}:){2,7}:?(?:[A-F0-9]{1,4})?(?![A-F0-9:])/gi,
-    replacement: '[REDACTED_IP]',
+    replacement: (match) =>
+      match.includes('::') || /[a-f]/i.test(match) || match.split(':').some((group) => group.length > 2)
+        ? '[REDACTED_IP]'
+        : match,
   },
   {
     re: /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi,
@@ -112,7 +118,9 @@ const TEXT_PATTERNS: Array<{ re: RegExp; replacement: TextReplacement }> = [
     replacement: '[REDACTED_PHONE]',
   },
   {
-    re: /(?:~|\/Users\/[^/\s"'<>]+|\/home\/[^/\s"'<>]+)(?:\/[^\s"'<>]*)?/g,
+    // A tilde only counts as a home path when it starts one (`~/...`) —
+    // bare `~` is common in prose ("~10s", "~~strikethrough~~").
+    re: /(?:~(?=\/)|\/Users\/[^/\s"'<>]+|\/home\/[^/\s"'<>]+)(?:\/[^\s"'<>]*)?/g,
     replacement: '[HOME]',
   },
 ];
@@ -288,15 +296,21 @@ function redactTextWithStats(input: string): RedactionResult<string> {
 }
 
 function replaceAndCount(input: string, re: RegExp, replacement: TextReplacement): RedactionResult<string> {
-  const matches = Array.from(input.matchAll(re));
-  if (matches.length === 0) return { value: input, redactions: 0 };
+  if (typeof replacement === 'string') {
+    const matches = Array.from(input.matchAll(re));
+    if (matches.length === 0) return { value: input, redactions: 0 };
+    return { value: input.replace(re, replacement), redactions: matches.length };
+  }
 
-  const value =
-    typeof replacement === 'string'
-      ? input.replace(re, replacement)
-      : input.replace(re, (match: string, ...groups: string[]) => replacement(match, ...groups));
-
-  return { value, redactions: matches.length };
+  // Function replacements may decline a match (return it unchanged); only
+  // count the ones that actually redacted something.
+  let redactions = 0;
+  const value = input.replace(re, (match: string, ...groups: string[]) => {
+    const replaced = replacement(match, ...groups);
+    if (replaced !== match) redactions += 1;
+    return replaced;
+  });
+  return { value, redactions };
 }
 
 function mergeRedactDirResult(target: RedactDirResult, source: RedactDirResult): void {

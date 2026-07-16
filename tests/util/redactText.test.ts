@@ -53,6 +53,32 @@ describe('redactText', () => {
     expect(redacted).toContain('[HOME]');
   });
 
+  it('leaves clock times, ISO timestamps, and bare tildes untouched', () => {
+    const raw = [
+      'request finished at 09:05:11 in 120ms',
+      '[2026-07-15T12:34:56.789Z] retry in ~5s, cpu ~50%, diff ~~old~~ new',
+    ].join('\n');
+
+    expect(redactText(raw)).toBe(raw);
+    expect(redactJson({ ts: '2026-07-15T12:34:56.789Z', level: 'info' })).toEqual({
+      ts: '2026-07-15T12:34:56.789Z',
+      level: 'info',
+    });
+  });
+
+  it('still masks real IPv6 addresses and tilde-rooted paths next to clock times', () => {
+    const raw =
+      'peer 2001:0db8:85a3:0000:0000:8a2e:0370:7334 wrote ~/Library/Logs/app.log at 09:05:11';
+
+    const redacted = redactText(raw);
+
+    expect(redacted).not.toContain('2001:0db8');
+    expect(redacted).not.toContain('~/Library/Logs/app.log');
+    expect(redacted).toContain('[REDACTED_IP]');
+    expect(redacted).toContain('[HOME]');
+    expect(redacted).toContain('09:05:11');
+  });
+
   it('masks base64-encoded home paths before the residual high-entropy scan', () => {
     const encodedPath = Buffer.from('/Users/cesar/projects/myapp').toString('base64').replace(/=+$/u, '');
     const raw = `workloop persistence directory: [HOME]/durable/workloop-persistence/${encodedPath}`;
