@@ -167,6 +167,48 @@ describe('Capture command', () => {
     expect(mockMkdir).toHaveBeenCalledWith('/tmp/cap', { recursive: true });
   });
 
+  it('captures to a directory through the library API', async () => {
+    const pageState = JSON.stringify({
+      url: 'http://localhost:1420',
+      title: 'Library App',
+      viewport: { width: 1280, height: 720 },
+      scroll: { x: 0, y: 0 },
+      document: { width: 1280, height: 1440 },
+      hasTauri: true,
+    });
+    const domTree = JSON.stringify({ tag: 'body', rect: { width: 1280, height: 720 } });
+    const storage = JSON.stringify({ localStorage: [], sessionStorage: [] });
+    const evalResponses = ['ok', pageState, domTree, storage, '[]'];
+    let callCount = 0;
+    const bridge = {
+      eval: vi.fn(async () => evalResponses[callCount++]),
+      getDocumentTitle: vi.fn(async () => 'Library App'),
+      getElementRect: vi.fn(),
+      getViewportSize: vi.fn(),
+      fetchLogs: vi.fn(async () => []),
+    };
+    const adapter = createMockAdapter();
+    const { captureToDir } = await import('../../src/commands/capture.js');
+
+    const manifest = await captureToDir(bridge, adapter, {
+      output: '/tmp/libcap',
+      domDepth: 3,
+      logsDuration: 0,
+    });
+
+    expect(mockMkdir).toHaveBeenCalledWith('/tmp/libcap', { recursive: true });
+    expect(manifest).toMatchObject({
+      url: 'http://localhost:1420',
+      title: 'Library App',
+      viewport: { width: 1280, height: 720 },
+      errorCount: 0,
+    });
+    expect(mockWriteFile).toHaveBeenCalledWith(
+      '/tmp/libcap/manifest.json',
+      expect.stringContaining('"title": "Library App"'),
+    );
+  });
+
   it('writes expected artifact files', async () => {
     const pageState = JSON.stringify({
       url: 'http://localhost:1420',
