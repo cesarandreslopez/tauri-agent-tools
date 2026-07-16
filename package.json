@@ -14,7 +14,8 @@
     "test:watch": "vitest",
     "dev": "tsc --watch",
     "typecheck": "tsc --noEmit",
-    "lint": "tsc --noEmit && eslint src/",
+    "check:bridge-parity": "node scripts/check-bridge-parity.mjs",
+    "lint": "npm run check:bridge-parity && tsc --noEmit && eslint src/",
     "lint:fix": "eslint src/ --fix",
     "prepublishOnly": "npm run build"
   },
