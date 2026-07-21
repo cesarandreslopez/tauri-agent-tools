@@ -1,7 +1,7 @@
 ---
 name: tauri-agent-tools
 description: CLI for inspecting and interacting with Tauri desktop apps — DOM queries, screenshots, interaction (click/type/scroll), IPC monitoring, store inspection, structured assertions, plus bridge-free diagnostics (unified cross-layer logs, deep OS process trees, OS logs, app paths, sidecar NDJSON tap/replay, forensic bundles) and the `diagnose`/`bundle` super-commands for one-shot triage. Works against older/vendored bridges by degrading gracefully.
-version: 0.9.0
+version: 0.10.0
 tags: [tauri, desktop, debugging, screenshot, dom, inspection, diff, mutations, snapshot, interaction, click, type, scroll, invoke, probe, capture, check, store-inspect, logs, bundle, process-tree, forensics, os-logs, app-paths, sidecar, config-inspect, diagnose]
 ---
 
