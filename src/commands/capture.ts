@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { Command } from 'commander';
 import type { PlatformAdapter } from '../types.js';
 import type { ImageFormat } from '../schemas/commands.js';
-import { addBridgeOptions, resolveBridge, parseIntArg } from './shared.js';
+import { addBridgeOptions, resolveBridge, resolveWindowId, parseIntArg } from './shared.js';
 import type { BridgeOpts } from './shared.js';
 import { buildSerializerScript } from './dom.js';
 import { computeCropRect, cropImage } from '../util/image.js';
@@ -47,21 +47,11 @@ const DRAIN_CONSOLE_ERRORS_SCRIPT = `(() => {
   return JSON.stringify(errs);
 })()`;
 
-async function resolveWindowId(
-  adapter: PlatformAdapter,
-  bridge: BridgeClient,
-  title?: string,
-): Promise<string> {
-  if (title) return adapter.findWindow(title);
-  const docTitle = await bridge.getDocumentTitle();
-  if (!docTitle) throw new Error('Could not get window title. Use --title.');
-  return adapter.findWindow(docTitle);
-}
-
 export interface CaptureToDirOptions {
   output: string;
   selector?: string;
   title?: string;
+  windowId?: string;
   domDepth: number;
   eval?: string;
   logsDuration: number;
@@ -105,7 +95,7 @@ export async function captureToDir(
 
   // 4. Screenshot — save to screenshot.png
   try {
-    const windowId = await resolveWindowId(adapter, bridge, opts.title);
+    const windowId = await resolveWindowId(adapter, bridge, opts);
     let buffer: Buffer;
     if (opts.selector) {
       const elementRect = await bridge.getElementRect(opts.selector);
@@ -211,7 +201,8 @@ export function registerCapture(
     .description('Capture enhanced snapshot with manifest directory (screenshot, DOM, state, logs, errors)')
     .requiredOption('-o, --output <dir>', 'Output directory path')
     .option('-s, --selector <css>', 'CSS selector to screenshot (full window if omitted)')
-    .option('-t, --title <regex>', 'Window title to match (default: auto-discover)')
+    .option('-t, --title <regex>', 'Window title to match — regex; quote titles with spaces (default: auto-discover)')
+    .option('-w, --window-id <id>', 'Platform window id (from list-windows) — overrides --title')
     .option('--dom-depth <number>', 'DOM tree depth', parseIntArg, 3)
     .option('--eval <js>', 'Additional JS to eval and save')
     .option('--logs-duration <ms>', 'Duration to wait for console errors (ms)', parseIntArg, 3000)

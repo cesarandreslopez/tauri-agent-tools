@@ -2,10 +2,9 @@ import { writeFile } from 'node:fs/promises';
 import { Command } from 'commander';
 import type { PlatformAdapter } from '../types.js';
 import type { ImageFormat } from '../schemas/commands.js';
-import { addBridgeOptions, resolveBridge, parseIntArg } from './shared.js';
+import { addBridgeOptions, resolveBridge, resolveWindowId, parseIntArg } from './shared.js';
 import { buildSerializerScript } from './dom.js';
 import { computeCropRect, cropImage } from '../util/image.js';
-import type { BridgeClient } from '../bridge/client.js';
 import { DomNodeSchema } from '../schemas/dom.js';
 import { PageStateSchema, SnapshotStorageResultSchema } from '../schemas/commands.js';
 
@@ -26,17 +25,6 @@ const STORAGE_SCRIPT = `(() => {
   return JSON.stringify({ localStorage: local, sessionStorage: session });
 })()`;
 
-async function resolveWindowId(
-  adapter: PlatformAdapter,
-  bridge: BridgeClient,
-  title?: string,
-): Promise<string> {
-  if (title) return adapter.findWindow(title);
-  const docTitle = await bridge.getDocumentTitle();
-  if (!docTitle) throw new Error('Could not get window title. Use --title.');
-  return adapter.findWindow(docTitle);
-}
-
 export function registerSnapshot(
   program: Command,
   getAdapter: () => PlatformAdapter | Promise<PlatformAdapter>,
@@ -45,7 +33,8 @@ export function registerSnapshot(
     .description('Capture screenshot + DOM + page state + storage in one shot')
     .requiredOption('-o, --output <prefix>', 'Output path prefix (e.g. /tmp/debug)')
     .option('-s, --selector <css>', 'CSS selector to screenshot (full window if omitted)')
-    .option('-t, --title <regex>', 'Window title to match (default: auto-discover)')
+    .option('-t, --title <regex>', 'Window title to match — regex; quote titles with spaces (default: auto-discover)')
+    .option('-w, --window-id <id>', 'Platform window id (from list-windows) — overrides --title')
     .option('--dom-depth <number>', 'DOM tree depth', parseIntArg, 3)
     .option('--eval <js>', 'Additional JS to eval and save')
     .option('--json', 'Output structured manifest');
@@ -56,6 +45,7 @@ export function registerSnapshot(
     output: string;
     selector?: string;
     title?: string;
+    windowId?: string;
     domDepth: number;
     eval?: string;
     json?: boolean;
@@ -70,7 +60,7 @@ export function registerSnapshot(
 
     // 1. Screenshot
     try {
-      const windowId = await resolveWindowId(adapter, bridge, opts.title);
+      const windowId = await resolveWindowId(adapter, bridge, opts);
       let buffer: Buffer;
       if (opts.selector) {
         const elementRect = await bridge.getElementRect(opts.selector);

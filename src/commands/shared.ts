@@ -1,6 +1,7 @@
 import type { Command } from 'commander';
 import type { z } from 'zod';
 import type { BridgeConfig } from '../schemas/bridge.js';
+import type { PlatformAdapter } from '../types.js';
 import { BridgeClient } from '../bridge/client.js';
 import { discoverBridge, discoverBridgesByPid } from '../bridge/tokenDiscovery.js';
 
@@ -18,6 +19,36 @@ export interface BridgeOpts {
    * (false) = degrade gracefully. See {@link endpointAvailable}.
    */
   strict?: boolean;
+}
+
+/**
+ * Options parsed from the window-targeting CLI flags.
+ */
+export interface WindowTargetOpts {
+  windowId?: string;
+  title?: string;
+}
+
+/**
+ * Resolve the platform window id for a window-consuming command.
+ * Precedence: --window-id (used verbatim) > --title regex > bridge document.title.
+ *
+ * The id is not validated here: its format is adapter-specific (X11/macOS/Sway
+ * numeric, Hyprland hex 0x…), and the adapters that interpolate ids into shell
+ * commands already guard with validateWindowId().
+ */
+export async function resolveWindowId(
+  adapter: PlatformAdapter,
+  bridge: BridgeClient,
+  opts: WindowTargetOpts,
+): Promise<string> {
+  if (opts.windowId) return opts.windowId;
+  if (opts.title) return adapter.findWindow(opts.title);
+  const docTitle = await bridge.getDocumentTitle();
+  if (!docTitle) {
+    throw new Error('Could not get window title from bridge. Use --title or --window-id.');
+  }
+  return adapter.findWindow(docTitle);
 }
 
 /**

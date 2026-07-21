@@ -55,46 +55,35 @@ describe('Snapshot command', () => {
   });
 
   describe('resolveWindowId logic', () => {
-    it('uses title when provided', async () => {
+    it('resolves title via findWindow, falls back to bridge doc title, and throws on empty', async () => {
+      const { resolveWindowId } = await import('../../src/commands/shared.js');
+      const { BridgeClient } = await import('../../src/bridge/client.js');
       const adapter = createMockAdapter();
-      const mockFn = vi.mocked(adapter.findWindow);
-      mockFn.mockResolvedValue('99999');
+      const bridge = new BridgeClient({ port: 9999, token: 'test' });
 
-      // Simulate the resolveWindowId logic
-      const title = 'My App';
-      const windowId = await adapter.findWindow(title);
-      expect(windowId).toBe('99999');
-      expect(mockFn).toHaveBeenCalledWith('My App');
-    });
+      // --title path — no bridge call
+      expect(await resolveWindowId(adapter, bridge, { title: 'My App' })).toBe('12345');
+      expect(vi.mocked(adapter.findWindow)).toHaveBeenCalledWith('My App');
 
-    it('falls back to bridge document title', async () => {
+      // doc-title fallback
       const mockFetch = vi.fn().mockResolvedValue({
         ok: true,
         json: () => Promise.resolve({ result: 'Discovered Title' }),
       });
       vi.stubGlobal('fetch', mockFetch);
-
-      const { BridgeClient } = await import('../../src/bridge/client.js');
-      const bridge = new BridgeClient({ port: 9999, token: 'test' });
-      const docTitle = await bridge.getDocumentTitle();
-      expect(docTitle).toBe('Discovered Title');
-
+      expect(await resolveWindowId(adapter, bridge, {})).toBe('12345');
+      expect(vi.mocked(adapter.findWindow)).toHaveBeenCalledWith('Discovered Title');
       vi.unstubAllGlobals();
-    });
 
-    it('throws when bridge returns empty title', async () => {
-      const mockFetch = vi.fn().mockResolvedValue({
+      // empty doc title throws
+      const emptyFetch = vi.fn().mockResolvedValue({
         ok: true,
         json: () => Promise.resolve({ result: '' }),
       });
-      vi.stubGlobal('fetch', mockFetch);
-
-      const { BridgeClient } = await import('../../src/bridge/client.js');
-      const bridge = new BridgeClient({ port: 9999, token: 'test' });
-      const docTitle = await bridge.getDocumentTitle();
-      // The resolveWindowId function checks: if (!docTitle) throw ...
-      expect(!docTitle).toBe(true);
-
+      vi.stubGlobal('fetch', emptyFetch);
+      await expect(resolveWindowId(adapter, bridge, {})).rejects.toThrow(
+        /Could not get window title/,
+      );
       vi.unstubAllGlobals();
     });
   });
@@ -302,6 +291,44 @@ describe('Snapshot command', () => {
       vi.unstubAllGlobals();
 
       expect(vi.mocked(adapter.findWindow)).toHaveBeenCalledWith('My Custom Title');
+    });
+
+    it('uses --window-id directly, skipping findWindow', async () => {
+      const domTree = JSON.stringify({ tag: 'body', rect: { width: 100, height: 100 } });
+      const pageState = JSON.stringify({
+        url: 'http://localhost', title: 'T',
+        viewport: { width: 100, height: 100 },
+        scroll: { x: 0, y: 0 },
+        document: { width: 100, height: 100 },
+        hasTauri: false,
+      });
+      const storage = JSON.stringify({ localStorage: [], sessionStorage: [] });
+
+      let callCount = 0;
+      // No getDocumentTitle call expected — window id is provided directly
+      const responses = [domTree, pageState, storage];
+      const mockFetch = vi.fn().mockImplementation(() => {
+        const result = responses[callCount++];
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ result }),
+        });
+      });
+      vi.stubGlobal('fetch', mockFetch);
+
+      const { Command } = await import('commander');
+      const { registerSnapshot } = await import('../../src/commands/snapshot.js');
+      const program = new Command();
+      const adapter = createMockAdapter();
+      registerSnapshot(program, () => adapter);
+
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      await program.parseAsync(['node', 'test', 'snapshot', '-o', '/tmp/w', '--window-id', '424242']);
+      logSpy.mockRestore();
+      vi.unstubAllGlobals();
+
+      expect(vi.mocked(adapter.findWindow)).not.toHaveBeenCalled();
+      expect(vi.mocked(adapter.captureWindow)).toHaveBeenCalledWith('424242', 'png');
     });
 
     it('crops screenshot when --selector is provided', async () => {

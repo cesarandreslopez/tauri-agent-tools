@@ -103,6 +103,70 @@ import { writeFile } from 'node:fs/promises';
 const mockExec = vi.mocked(exec);
 const mockWriteFile = vi.mocked(writeFile);
 
+describe('Screenshot command flow', () => {
+  function createMockAdapter() {
+    return {
+      findWindow: vi.fn().mockResolvedValue('12345'),
+      captureWindow: vi.fn().mockResolvedValue(Buffer.from('fake-png')),
+      getWindowGeometry: vi.fn().mockResolvedValue({
+        windowId: '12345', x: 0, y: 0, width: 1920, height: 1110,
+      }),
+      getWindowName: vi.fn().mockResolvedValue('Test App'),
+      listWindows: vi.fn().mockResolvedValue([]),
+    };
+  }
+
+  async function createProgram() {
+    const { Command } = await import('commander');
+    const { registerScreenshot } = await import('../../src/commands/screenshot.js');
+    const program = new Command();
+    program.exitOverride();
+    const mockAdapter = createMockAdapter();
+    registerScreenshot(program, () => mockAdapter);
+    return { program, mockAdapter };
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('captures via --window-id without findWindow or a bridge', async () => {
+    const { program, mockAdapter } = await createProgram();
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    await program.parseAsync(['node', 'test', 'screenshot', '--window-id', '777', '-o', '/tmp/x.png']);
+    logSpy.mockRestore();
+
+    expect(mockAdapter.findWindow).not.toHaveBeenCalled();
+    expect(mockAdapter.captureWindow).toHaveBeenCalledWith('777', 'png');
+    expect(mockWriteFile).toHaveBeenCalledWith('/tmp/x.png', Buffer.from('fake-png'));
+  });
+
+  it('reports the resolved windowId in --json output', async () => {
+    const { program } = await createProgram();
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    await program.parseAsync([
+      'node', 'test', 'screenshot', '-w', '0x56a1b2', '-o', '/tmp/x.png', '--json',
+    ]);
+
+    const output = JSON.parse(logSpy.mock.calls[0][0] as string);
+    logSpy.mockRestore();
+
+    expect(output.windowId).toBe('0x56a1b2');
+    expect(output.windowTitle).toBeNull();
+    expect(output.path).toBe('/tmp/x.png');
+  });
+
+  it('requires --selector, --title, or --window-id', async () => {
+    const { program } = await createProgram();
+
+    await expect(
+      program.parseAsync(['node', 'test', 'screenshot']),
+    ).rejects.toThrow(/Either --selector \(with bridge\), --title, or --window-id/);
+  });
+});
+
 describe('Screenshot command integration', () => {
   beforeEach(() => {
     vi.clearAllMocks();

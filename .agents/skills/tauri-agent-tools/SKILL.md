@@ -39,7 +39,7 @@ Some commands require the Rust dev bridge running inside the Tauri app. Others w
 `capabilities audit`, `webview attach`, `health` *(richer with bridge v0.7+)*
 
 **Standalone** (no bridge needed):
-`screenshot --title` (full window only), `wait --title`, `list-windows`, `info`, `diff`, `logs`, `app-paths`, `config inspect`, `os-logs`, `sidecar tap`, `sidecar replay`, `forensics`
+`screenshot --title`/`--window-id` (full window only), `wait --title`, `list-windows`, `info`, `diff`, `logs`, `app-paths`, `config inspect`, `os-logs`, `sidecar tap`, `sidecar replay`, `forensics`
 
 **Optional bridge** (work standalone, richer with a bridge):
 `probe`, `process-tree` (use `--deep` for a bridge-free OS walk), `logs` (merges on-disk files alone, or also drains the bridge ring buffer), `bundle`, `diagnose`
@@ -332,12 +332,12 @@ tauri-agent-tools eval "document.title" --window-label overlay --json
 
 | Command | Key Flags | Bridge? | Description |
 |---------|-----------|---------|-------------|
-| `screenshot` | `--selector <css>`, `--title <regex>`, `-o <path>`, `--max-width <n>` | selector: yes, title: no | Capture window or DOM element screenshot |
+| `screenshot` | `--selector <css>`, `--title <regex>`, `--window-id <id>`, `-o <path>`, `--max-width <n>` | selector: yes, title/window-id: no | Capture window or DOM element screenshot |
 | `dom` | `[selector]`, `--depth <n>`, `--styles`, `--text <pattern>`, `--mode accessibility`, `--json` | yes | Query DOM structure or find elements by text |
 | `eval` | `<js-expression>`, `--file <path>` | yes | Evaluate JavaScript in webview |
 | `wait` | `--selector <css>`, `--eval <js>`, `--title <regex>`, `--timeout <ms>` | selector/eval: yes | Wait for a condition |
 | `list-windows` | `--tauri`, `--json` | no | List visible windows |
-| `info` | `--title <regex>`, `--json` | no | Window geometry and display info |
+| `info` | `--title <regex>`, `--window-id <id>`, `--json` | no | Window geometry and display info |
 | `ipc-monitor` | `--filter <cmd>`, `--duration <ms>`, `--slow <ms>`, `--stats`, `--json` | yes | Monitor Tauri IPC calls; flag slow calls + per-command latency summary |
 | `console-monitor` | `--level <lvl>`, `--filter <regex>`, `--duration <ms>`, `--json` | yes | Monitor console output |
 | `rust-logs` | `--level <lvl>`, `--target <regex>`, `--source <src>`, `--duration <ms>`, `--json` | yes | Monitor Rust logs and sidecar output |
@@ -345,7 +345,7 @@ tauri-agent-tools eval "document.title" --window-label overlay --json
 | `page-state` | `--json` | yes | URL, title, viewport, scroll, document size |
 | `diff` | `<image1> <image2>`, `-o <path>`, `--threshold <pct>`, `--json` | no | Compare two screenshots |
 | `mutations` | `<selector>`, `--attributes`, `--duration <ms>`, `--json` | yes | Watch DOM mutations |
-| `snapshot` | `-o <prefix>`, `-s <css>`, `--dom-depth <n>`, `--eval <js>`, `--json` | yes | Screenshot + DOM + page state + storage |
+| `snapshot` | `-o <prefix>`, `-s <css>`, `--window-id <id>`, `--dom-depth <n>`, `--eval <js>`, `--json` | yes | Screenshot + DOM + page state + storage |
 | `click` | `<selector>`, `--double`, `--right`, `--wait <ms>`, `--json` | yes | Click a DOM element |
 | `type` | `<selector> <text>`, `--clear`, `--json` | yes | Type text into an input |
 | `scroll` | `--selector <css>`, `--by <px>`, `--to-top`, `--to-bottom`, `--into-view`, `--json` | yes | Scroll window or element |
@@ -354,7 +354,7 @@ tauri-agent-tools eval "document.title" --window-label overlay --json
 | `select` | `<selector> [value]`, `--toggle`, `--json` | yes | Select dropdown or toggle checkbox |
 | `invoke` | `<command> [args-json]`, `--json` | yes | Invoke a Tauri IPC command |
 | `probe` | `--pid <n>`, `--json` | optional | Discover targets and bridge health |
-| `capture` | `-o <dir>`, `-s <css>`, `--logs-duration <ms>`, `--json` | yes | Full debug evidence bundle |
+| `capture` | `-o <dir>`, `-s <css>`, `--window-id <id>`, `--logs-duration <ms>`, `--json` | yes | Full debug evidence bundle |
 | `check` | `--selector`, `--text`, `--eval`, `--no-errors`, `--json` | yes | Structured assertions (exit 0/1) |
 | `store-inspect` | `--framework`, `--store <name>`, `--depth <n>`, `--json` | yes | Inspect reactive store state |
 | `app-paths` | `--config <path>`, `--identifier <id>`, `--platform <os>`, `--exists`, `--json` | no | Resolve Tauri 2 app's OS data/log/cache/config dirs |

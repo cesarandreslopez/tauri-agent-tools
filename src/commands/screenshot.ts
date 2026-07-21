@@ -3,7 +3,7 @@ import { Command } from 'commander';
 import type { PlatformAdapter } from '../types.js';
 import { ImageFormatSchema } from '../schemas/commands.js';
 import type { ImageFormat } from '../schemas/commands.js';
-import { addBridgeOptions, resolveBridge, parseIntArg } from './shared.js';
+import { addBridgeOptions, resolveBridge, resolveWindowId, parseIntArg } from './shared.js';
 import { computeCropRect, cropImage, resizeImage } from '../util/image.js';
 
 function autoOutputPath(format: ImageFormat): string {
@@ -18,7 +18,8 @@ export function registerScreenshot(
   const cmd = new Command('screenshot')
     .description('Capture a screenshot of a window or DOM element')
     .option('-s, --selector <css>', 'CSS selector — screenshot just this element (requires bridge)')
-    .option('-t, --title <regex>', 'Window title to match (default: auto-discover from bridge)')
+    .option('-t, --title <regex>', 'Window title to match — regex; quote titles with spaces (default: auto-discover from bridge)')
+    .option('-w, --window-id <id>', 'Platform window id (from list-windows) — overrides --title')
     .option('-o, --output <path>', 'Output file path (default: auto-named)')
     .option('--format <fmt>', 'Output format: png or jpg', 'png')
     .option('--max-width <number>', 'Resize to max width', parseIntArg)
@@ -26,6 +27,7 @@ export function registerScreenshot(
     .addHelpText('after', `
 Examples:
   $ tauri-agent-tools screenshot --title "My App"
+  $ tauri-agent-tools screenshot --window-id 12345 -o win.png   # id from list-windows, no bridge needed
   $ tauri-agent-tools screenshot --selector ".sidebar" --output sidebar.png
   $ tauri-agent-tools screenshot --selector "#login" --format jpg --json`);
 
@@ -34,6 +36,7 @@ Examples:
   cmd.action(async (opts: {
     selector?: string;
     title?: string;
+    windowId?: string;
     output?: string;
     format: string;
     maxWidth?: number;
@@ -49,6 +52,7 @@ Examples:
     const adapter = await getAdapter();
 
     let buffer: Buffer;
+    let windowId: string;
 
     if (opts.selector) {
       // DOM-targeted pixel capture — the core feature
@@ -60,18 +64,7 @@ Examples:
 
       const viewport = await bridge.getViewportSize();
 
-      // Find window
-      let windowId: string;
-      if (opts.title) {
-        windowId = await adapter.findWindow(opts.title);
-      } else {
-        const title = await bridge.getDocumentTitle();
-        if (!title) {
-          throw new Error('Could not get window title from bridge. Use --title to specify.');
-        }
-        windowId = await adapter.findWindow(title);
-      }
-
+      windowId = await resolveWindowId(adapter, bridge, opts);
       const windowGeom = await adapter.getWindowGeometry(windowId);
 
       // Capture full window
@@ -85,10 +78,13 @@ Examples:
       buffer = await cropImage(buffer, cropRect, format);
     } else {
       // Full window fallback — no bridge needed
-      if (!opts.title) {
-        throw new Error('Either --selector (with bridge) or --title is required');
+      if (opts.windowId) {
+        windowId = opts.windowId;
+      } else if (opts.title) {
+        windowId = await adapter.findWindow(opts.title);
+      } else {
+        throw new Error('Either --selector (with bridge), --title, or --window-id is required');
       }
-      const windowId = await adapter.findWindow(opts.title);
       buffer = await adapter.captureWindow(windowId, format);
     }
 
@@ -106,6 +102,7 @@ Examples:
         size: buffer.length,
         selector: opts.selector ?? null,
         windowTitle: opts.title ?? null,
+        windowId,
       }, null, 2));
     } else {
       console.log(output);

@@ -8,15 +8,18 @@ Show window geometry and display server info.
 ## Usage
 
 ```bash
-tauri-agent-tools info --title <regex> [options]
+tauri-agent-tools info (--title <regex> | --window-id <id>) [options]
 ```
 
 ## Options
 
 | Option | Description | Default |
 |--------|-------------|---------|
-| `-t, --title <regex>` | Window title to match (required) | — |
+| `-t, --title <regex>` | Window title to match — regex; quote titles with spaces | — |
+| `-w, --window-id <id>` | Platform window id (from `list-windows`) — overrides `--title` | — |
 | `--json` | Output as JSON | — |
+
+One of `--title` or `--window-id` is required.
 
 ## Examples
 
@@ -53,8 +56,16 @@ tauri-agent-tools info --title "My App" --json
 }
 ```
 
+### By window id
+
+```bash
+tauri-agent-tools info --window-id 12345678
+```
+
 ## Notes
 
 - The `--title` flag accepts a regex pattern for matching
+- `--window-id` skips the title search entirely — take the id from `list-windows --json` (`windowId` field); its format is platform-specific (X11/macOS/Sway numeric, Hyprland hex `0x…`)
+- `--window-id` (platform/OS window) is unrelated to `--window-label` (Tauri webview label, a bridge concept)
 - Window geometry includes decoration (title bar, borders)
 - Display server is one of: `x11`, `wayland`, `darwin`

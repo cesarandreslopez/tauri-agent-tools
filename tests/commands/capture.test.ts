@@ -209,6 +209,87 @@ describe('Capture command', () => {
     );
   });
 
+  it('uses windowId from CaptureToDirOptions, skipping findWindow', async () => {
+    const pageState = JSON.stringify({
+      url: 'http://localhost:1420',
+      title: 'Library App',
+      viewport: { width: 1280, height: 720 },
+      scroll: { x: 0, y: 0 },
+      document: { width: 1280, height: 1440 },
+      hasTauri: true,
+    });
+    const domTree = JSON.stringify({ tag: 'body', rect: { width: 1280, height: 720 } });
+    const storage = JSON.stringify({ localStorage: [], sessionStorage: [] });
+    const evalResponses = ['ok', pageState, domTree, storage, '[]'];
+    let callCount = 0;
+    const bridge = {
+      eval: vi.fn(async () => evalResponses[callCount++]),
+      getDocumentTitle: vi.fn(async () => 'Library App'),
+      getElementRect: vi.fn(),
+      getViewportSize: vi.fn(),
+      fetchLogs: vi.fn(async () => []),
+    };
+    const adapter = createMockAdapter();
+    const { captureToDir } = await import('../../src/commands/capture.js');
+
+    await captureToDir(bridge, adapter, {
+      output: '/tmp/libcapw',
+      domDepth: 3,
+      logsDuration: 0,
+      windowId: '555',
+    });
+
+    expect(vi.mocked(adapter.findWindow)).not.toHaveBeenCalled();
+    expect(bridge.getDocumentTitle).not.toHaveBeenCalled();
+    expect(vi.mocked(adapter.captureWindow)).toHaveBeenCalledWith('555', 'png');
+  });
+
+  it('uses --window-id from the CLI, skipping findWindow', async () => {
+    const pageState = JSON.stringify({
+      url: 'http://localhost:1420',
+      title: 'Test App',
+      viewport: { width: 1920, height: 1080 },
+      scroll: { x: 0, y: 0 },
+      document: { width: 1920, height: 2000 },
+      hasTauri: true,
+    });
+    const domTree = JSON.stringify({ tag: 'body', rect: { width: 1920, height: 1080 } });
+    const storage = JSON.stringify({ localStorage: [], sessionStorage: [] });
+
+    let callCount = 0;
+    // No window-title eval expected — the id is provided directly
+    const evalResponses = ['ok', pageState, domTree, storage, '[]'];
+    const mockFetch = vi.fn().mockImplementation((url: string) => {
+      if (String(url).includes('/logs')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ entries: [] }),
+        });
+      }
+      const result = evalResponses[callCount++];
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ result }),
+      });
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    const { Command } = await import('commander');
+    const { registerCapture } = await import('../../src/commands/capture.js');
+    const program = new Command();
+    program.exitOverride();
+    const adapter = createMockAdapter();
+    registerCapture(program, () => adapter);
+
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    await program.parseAsync(['node', 'test', 'capture', '-o', '/tmp/capw', '--window-id', '555', '--logs-duration', '0']);
+    logSpy.mockRestore();
+    vi.unstubAllGlobals();
+
+    expect(vi.mocked(adapter.findWindow)).not.toHaveBeenCalled();
+    expect(vi.mocked(adapter.captureWindow)).toHaveBeenCalledWith('555', 'png');
+  });
+
   it('writes expected artifact files', async () => {
     const pageState = JSON.stringify({
       url: 'http://localhost:1420',

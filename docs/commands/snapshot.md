@@ -17,7 +17,8 @@ tauri-agent-tools snapshot -o <prefix> [options]
 |--------|-------------|---------|
 | `-o, --output <prefix>` | Output path prefix (e.g. `/tmp/debug`) | (required) |
 | `-s, --selector <css>` | CSS selector to screenshot (full window if omitted) | — |
-| `-t, --title <regex>` | Window title to match | auto-discover |
+| `-t, --title <regex>` | Window title to match — regex; quote titles with spaces | auto-discover |
+| `-w, --window-id <id>` | Platform window id (from `list-windows`) — overrides `--title` | — |
 | `--dom-depth <number>` | DOM tree depth | `3` |
 | `--eval <js>` | Additional JS to eval and save | — |
 | `--json` | Output structured manifest | — |

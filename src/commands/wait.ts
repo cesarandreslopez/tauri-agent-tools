@@ -14,7 +14,7 @@ export function registerWait(
     .description('Wait for a condition to be met')
     .option('-s, --selector <css>', 'Wait for CSS selector to match an element')
     .option('-e, --eval <js>', 'Wait for JS expression to be truthy')
-    .option('-t, --title <regex>', 'Wait for window with title (no bridge needed)')
+    .option('-t, --title <regex>', 'Wait for window with title — regex; quote titles with spaces (no bridge needed)')
     .option('--timeout <ms>', 'Maximum wait time in milliseconds', parseIntArg, 10000)
     .option('--interval <ms>', 'Polling interval in milliseconds', parseIntArg, 500)
     .option('--json', 'Output structured JSON result')

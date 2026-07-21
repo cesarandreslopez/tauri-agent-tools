@@ -11,7 +11,8 @@ const mockDiscoverBridge = vi.mocked(discoverBridge);
 const mockDiscoverBridgesByPid = vi.mocked(discoverBridgesByPid);
 
 // Import after mocks are set up
-import { resolveBridge, addBridgeOptions } from '../../src/commands/shared.js';
+import { resolveBridge, resolveWindowId, addBridgeOptions } from '../../src/commands/shared.js';
+import type { PlatformAdapter } from '../../src/types.js';
 
 describe('shared', () => {
   beforeEach(() => {
@@ -107,6 +108,69 @@ describe('shared', () => {
       expect(client).toBeInstanceOf(BridgeClient);
       expect(mockDiscoverBridge).not.toHaveBeenCalled();
       expect(mockDiscoverBridgesByPid).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('resolveWindowId', () => {
+    function createMocks(docTitle = 'Doc Title') {
+      const adapter = {
+        findWindow: vi.fn().mockResolvedValue('12345'),
+        captureWindow: vi.fn(),
+        getWindowGeometry: vi.fn(),
+        getWindowName: vi.fn(),
+        listWindows: vi.fn(),
+      } as unknown as PlatformAdapter;
+      const bridge = {
+        getDocumentTitle: vi.fn().mockResolvedValue(docTitle),
+      } as unknown as BridgeClient;
+      return { adapter, bridge };
+    }
+
+    it('returns --window-id verbatim without validation (Hyprland hex ids)', async () => {
+      const { adapter, bridge } = createMocks();
+
+      const id = await resolveWindowId(adapter, bridge, { windowId: '0x56a1b2' });
+
+      expect(id).toBe('0x56a1b2');
+      expect(adapter.findWindow).not.toHaveBeenCalled();
+      expect(bridge.getDocumentTitle).not.toHaveBeenCalled();
+    });
+
+    it('--window-id wins over --title', async () => {
+      const { adapter, bridge } = createMocks();
+
+      const id = await resolveWindowId(adapter, bridge, { windowId: '777', title: 'My App' });
+
+      expect(id).toBe('777');
+      expect(adapter.findWindow).not.toHaveBeenCalled();
+    });
+
+    it('resolves --title via adapter.findWindow', async () => {
+      const { adapter, bridge } = createMocks();
+
+      const id = await resolveWindowId(adapter, bridge, { title: 'My App' });
+
+      expect(id).toBe('12345');
+      expect(adapter.findWindow).toHaveBeenCalledWith('My App');
+      expect(bridge.getDocumentTitle).not.toHaveBeenCalled();
+    });
+
+    it('falls back to the bridge document title when neither flag is given', async () => {
+      const { adapter, bridge } = createMocks('Bridge Doc');
+
+      const id = await resolveWindowId(adapter, bridge, {});
+
+      expect(id).toBe('12345');
+      expect(bridge.getDocumentTitle).toHaveBeenCalledOnce();
+      expect(adapter.findWindow).toHaveBeenCalledWith('Bridge Doc');
+    });
+
+    it('throws when the bridge document title is empty', async () => {
+      const { adapter, bridge } = createMocks('');
+
+      await expect(resolveWindowId(adapter, bridge, {})).rejects.toThrow(
+        /Could not get window title/,
+      );
     });
   });
 

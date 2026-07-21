@@ -69,12 +69,37 @@ describe('Info command', () => {
     consoleSpy.mockRestore();
   });
 
-  it('requires --title option', async () => {
+  it('requires --title or --window-id', async () => {
     const { program } = createProgram();
 
     await expect(
       program.parseAsync(['node', 'test', 'info']),
-    ).rejects.toThrow();
+    ).rejects.toThrow(/Either --title or --window-id is required/);
+  });
+
+  it('uses --window-id directly without calling findWindow', async () => {
+    const { program, mockAdapter } = createProgram();
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    await program.parseAsync(['node', 'test', 'info', '--window-id', '99999']);
+
+    expect(mockAdapter.findWindow).not.toHaveBeenCalled();
+    expect(mockAdapter.getWindowGeometry).toHaveBeenCalledWith('99999');
+    expect(mockAdapter.getWindowName).toHaveBeenCalledWith('99999');
+
+    vi.restoreAllMocks();
+  });
+
+  it('--window-id wins over --title', async () => {
+    const { program, mockAdapter } = createProgram();
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    await program.parseAsync(['node', 'test', 'info', '--title', 'My Window', '-w', '777']);
+
+    expect(mockAdapter.findWindow).not.toHaveBeenCalled();
+    expect(mockAdapter.getWindowGeometry).toHaveBeenCalledWith('777');
+
+    vi.restoreAllMocks();
   });
 
   it('calls adapter methods with correct arguments', async () => {

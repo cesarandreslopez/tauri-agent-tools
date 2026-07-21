@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **`-w, --window-id <id>`** on `screenshot`, `info`, `snapshot`, and `capture` ([#9](https://github.com/cesarandreslopez/tauri-agent-tools/issues/9)) — target a window by its platform id (from `list-windows`) instead of a `--title` regex. Skips `findWindow()` entirely, so there is no shell-quoting risk (ids have no spaces) and windows a title regex can't uniquely or reliably match (e.g. unmapped/headless windows under `xdotool search`) become addressable. The id passes through unvalidated at the CLI layer — its format is adapter-specific (X11/macOS/Sway numeric, Hyprland hex `0x…`); adapters that shell-interpolate ids keep their existing `validateWindowId()` guards. `screenshot --window-id` full-window capture needs no bridge at all. Unrelated to `--window-label` (Tauri webview label, a bridge concept).
+- Shared `resolveWindowId()` export from `src/commands/shared.ts` (windowId > title > bridge `document.title` precedence), replacing three duplicated per-command resolution helpers. `CaptureToDirOptions` gains an optional `windowId` field, and `screenshot --json` output now includes the resolved `windowId` (both additive).
+
+### Changed
+
+- `info --title` is no longer a required option — one of `--title` or `--window-id` suffices.
+- `--title` help text on window-targeting commands now notes that titles containing spaces must be shell-quoted (an unquoted title splits at the shell and can substring-match the wrong window).
+
 ## [0.9.0] - 2026-07-15
 
 Fork-uplift release: bug fixes and features generalized from the `contextful_debugger` fork. Everything is additive and backwards-compatible; schema additions are optional-only, and the bridge protocol change is opt-in by request shape.

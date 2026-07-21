@@ -92,7 +92,8 @@ Capture a screenshot of a window or DOM element.
 | Option | Description |
 |--------|-------------|
 | `-s, --selector <css>` | CSS selector — screenshot just this element (requires bridge) |
-| `-t, --title <regex>` | Window title to match |
+| `-t, --title <regex>` | Window title to match — regex; quote titles with spaces |
+| `-w, --window-id <id>` | Platform window id (from `list-windows`) — overrides `--title` |
 | `-o, --output <path>` | Output file path (default: auto-named) |
 | `--format <png\|jpg>` | Output format (default: png) |
 | `--max-width <number>` | Resize to max width |
@@ -148,6 +149,7 @@ Show window geometry and display server info.
 
 ```bash
 tauri-agent-tools info --title "My App" --json
+tauri-agent-tools info --window-id 12345678   # id from list-windows, skips title search
 ```
 
 ### `list-windows`
@@ -232,7 +234,8 @@ Capture screenshot + DOM tree + page state + storage in one shot. Writes multipl
 |--------|-------------|
 | `-o, --output <prefix>` | Output path prefix (e.g. `/tmp/debug`) |
 | `-s, --selector <css>` | CSS selector to screenshot (full window if omitted) |
-| `-t, --title <regex>` | Window title to match (default: auto-discover) |
+| `-t, --title <regex>` | Window title to match — regex; quote titles with spaces (default: auto-discover) |
+| `-w, --window-id <id>` | Platform window id (from `list-windows`) — overrides `--title` |
 | `--dom-depth <number>` | DOM tree depth (default: 3) |
 | `--eval <js>` | Additional JS to eval and save |
 | `--json` | Output structured manifest |

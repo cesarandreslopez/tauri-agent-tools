@@ -3,7 +3,7 @@
 Capture a screenshot of a window or DOM element.
 
 !!! info "Bridge"
-    Bridge required only when using `--selector`. Full window screenshots (`--title` only) work without a bridge.
+    Bridge required only when using `--selector`. Full window screenshots (`--title` or `--window-id`) work without a bridge.
 
 ## Usage
 
@@ -16,7 +16,8 @@ tauri-agent-tools screenshot [options]
 | Option | Description | Default |
 |--------|-------------|---------|
 | `-s, --selector <css>` | CSS selector — screenshot just this element (requires bridge) | — |
-| `-t, --title <regex>` | Window title to match (auto-discovered from bridge if omitted) | — |
+| `-t, --title <regex>` | Window title to match — regex; quote titles with spaces (auto-discovered from bridge if omitted) | — |
+| `-w, --window-id <id>` | Platform window id (from `list-windows`) — overrides `--title` | — |
 | `-o, --output <path>` | Output file path | `screenshot-<timestamp>.png` |
 | `--format <png\|jpg>` | Output format | `png` |
 | `--max-width <number>` | Resize to max width (preserves aspect ratio) | — |
@@ -31,6 +32,14 @@ tauri-agent-tools screenshot [options]
 ```bash
 tauri-agent-tools screenshot --title "My App" -o /tmp/full.png
 ```
+
+### Screenshot by window id
+
+```bash
+tauri-agent-tools screenshot --window-id 12345678 -o /tmp/full.png
+```
+
+Get the id from `list-windows --json` (the `windowId` field). No shell-quoting risk (ids have no spaces), and it works for windows a title regex can't uniquely or reliably match.
 
 ### DOM element screenshot
 
@@ -56,7 +65,8 @@ tauri-agent-tools screenshot --selector ".header" -o /tmp/header.png --json
   "format": "png",
   "size": 45231,
   "selector": ".header",
-  "windowTitle": null
+  "windowTitle": null,
+  "windowId": "12345678"
 }
 ```
 
@@ -77,10 +87,12 @@ When `--selector` is used:
 5. ImageMagick crops to the element bounds
 6. Optional resize with `--max-width`
 
-When only `--title` is used, the full window is captured directly without cropping.
+When only `--title` or `--window-id` is used, the full window is captured directly without cropping.
 
 ## Tips
 
 - Use `dom --depth 2` first to find the right CSS selector
 - The `--max-width` flag is useful for keeping screenshots manageable for AI agents
-- Without `--title`, the tool auto-discovers the window title from the bridge via `document.title`
+- Without `--title` or `--window-id`, the tool auto-discovers the window title from the bridge via `document.title`
+- Window id format is platform-specific (X11/macOS/Sway numeric, Hyprland hex `0x…`) — always take it from `list-windows` output
+- `--window-id` (platform/OS window) is unrelated to `--window-label` (Tauri webview label, a bridge concept)
