@@ -1,20 +1,24 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Command } from 'commander';
 import { buildSelectScript, registerSelect } from '../../../src/commands/interact/select.js';
 
 vi.mock('../../../src/bridge/tokenDiscovery.js', () => ({
-  discoverBridge: vi.fn(),
+  discoverBridge: vi.fn().mockResolvedValue({ port: 9999, token: 'test-token', pid: 12345 }),
   discoverBridgesByPid: vi.fn(),
 }));
 
 describe('buildSelectScript', () => {
   describe('value mode (toggle = false)', () => {
-    it('sets el.value and dispatches change and input events', () => {
+    it('writes the value through the native setter and dispatches input then change (#10)', () => {
       const script = buildSelectScript('select#country', 'US');
-      expect(script).toContain("document.querySelector('select#country')");
-      expect(script).toContain("el.value = 'US'");
-      expect(script).toContain("new Event('change', { bubbles: true })");
+      expect(script).toContain("var selector = 'select#country';");
+      expect(script).toContain('document.querySelector(selector)');
+      expect(script).toContain('var requested = "US";');
+      expect(script).toContain('writer.set(requested)');
+      expect(script).not.toMatch(/\bel\.value\s*=/);
       expect(script).toContain("new Event('input', { bubbles: true })");
+      expect(script).toContain("new Event('change', { bubbles: true })");
+      expect(script.indexOf("new Event('input'")).toBeLessThan(script.indexOf("new Event('change'"));
     });
 
     it('returns success JSON with selector, tagName, and value', () => {
@@ -26,43 +30,66 @@ describe('buildSelectScript', () => {
 
     it('returns error when element not found', () => {
       const script = buildSelectScript('.missing', 'val');
-      expect(script).toContain('Element not found');
+      expect(script).toContain("'Element not found: ' + selector");
       expect(script).toContain('success: false');
     });
 
-    it('wraps in IIFE', () => {
+    it('wraps in an arrow IIFE that returns a Promise', () => {
       const script = buildSelectScript('select', 'opt');
-      expect(script.trim()).toMatch(/^\(function\(\)/);
+      expect(script.trim()).toMatch(/^\(\(\) =>/);
       expect(script).toContain('})()');
+      expect(script).toContain('new Promise(');
     });
 
     it('handles empty string value', () => {
       const script = buildSelectScript('input#field', '');
-      expect(script).toContain("el.value = ''");
+      expect(script).toContain('var requested = "";');
     });
 
     it('handles undefined value (sets empty string)', () => {
       const script = buildSelectScript('input#field', undefined, false);
-      expect(script).toContain("el.value = ''");
+      expect(script).toContain('var requested = "";');
+    });
+
+    it('pre-checks <select> options and reports them on a miss', () => {
+      const script = buildSelectScript('#sel', 'x');
+      expect(script).toContain('__selectOptionValues(el)');
+      expect(script).toContain('options.slice(0, 50)');
+      expect(script).toContain('No <option> with value');
+    });
+
+    it('does not focus the element (unchanged select behaviour)', () => {
+      const script = buildSelectScript('#sel', 'x');
+      expect(script).not.toContain('el.focus()');
+    });
+
+    it('embeds the verify timeout and rejects out-of-range values', () => {
+      expect(buildSelectScript('#sel', 'x')).toContain(', 500, 50)');
+      expect(buildSelectScript('#sel', 'x', false, { verifyTimeoutMs: 1200 })).toContain(', 1200, 50)');
+      expect(() => buildSelectScript('#sel', 'x', false, { verifyTimeoutMs: 4001 })).toThrow(/--verify-timeout/);
     });
   });
 
   describe('toggle mode (toggle = true)', () => {
-    it('flips el.checked', () => {
+    it('performs a native click() instead of assigning el.checked', () => {
       const script = buildSelectScript('input[type="checkbox"]', undefined, true);
-      expect(script).toContain('el.checked = !el.checked');
+      expect(script).toContain('el.click()');
+      expect(script).not.toMatch(/\bel\.checked\s*=/);
     });
 
-    it('dispatches change and input events', () => {
+    it('does not dispatch synthetic change/input events (click() fires them natively)', () => {
       const script = buildSelectScript('#checkbox', undefined, true);
-      expect(script).toContain("new Event('change', { bubbles: true })");
-      expect(script).toContain("new Event('input', { bubbles: true })");
+      expect(script).not.toContain("new Event('change'");
+      expect(script).not.toContain("new Event('input'");
     });
 
-    it('returns success JSON with checked state', () => {
+    it('returns success JSON with checked state and verification', () => {
       const script = buildSelectScript('#checkbox', undefined, true);
       expect(script).toContain('success: true');
-      expect(script).toContain('el.checked');
+      expect(script).toContain('checked: v.observed');
+      expect(script).toContain('previousChecked: before');
+      expect(script).toContain("verification: 'reverted'");
+      expect(script).toContain('Checked state reverted');
     });
 
     it('does not set el.value in toggle mode', () => {
@@ -74,17 +101,40 @@ describe('buildSelectScript', () => {
       const script = buildSelectScript('.gone', undefined, true);
       expect(script).toContain('Element not found');
     });
+
+    it('refuses non-checkable, disabled and already-checked radio elements', () => {
+      const script = buildSelectScript('#cb', undefined, true);
+      expect(script).toContain('is not a checkbox or radio');
+      expect(script).toContain("matches(':disabled')");
+      expect(script).toContain("closest('fieldset[disabled]')");
+      expect(script).toContain('Element is disabled');
+      expect(script).toContain('Radio input is already checked');
+    });
+
+    it('embeds the verify timeout and never throws into the bridge', () => {
+      const script = buildSelectScript('#cb', undefined, true, { verifyTimeoutMs: 800 });
+      expect(script).toContain(', 800, 50)');
+      expect(script).toContain('} catch (e) {');
+      expect(script).toContain('Script error: ');
+    });
   });
 
-  describe('selector escaping', () => {
+  describe('selector and value escaping', () => {
     it('escapes single quotes in selector', () => {
       const script = buildSelectScript("input[name='agree']", 'yes');
       expect(script).toContain("input[name=\\'agree\\']");
     });
 
-    it('escapes single quotes in value', () => {
+    it('embeds the value as JSON so quotes survive', () => {
       const script = buildSelectScript('#input', "it's a value");
-      expect(script).toContain("it\\'s a value");
+      expect(script).toContain('var requested = "it\'s a value";');
+    });
+
+    it('embeds newlines safely (previously a script syntax error)', () => {
+      const script = buildSelectScript('#input', 'x\ny');
+      const match = script.match(/var requested = (.+);/);
+      expect(match).not.toBeNull();
+      expect(JSON.parse(match![1]!)).toBe('x\ny');
     });
   });
 });
@@ -118,6 +168,14 @@ describe('registerSelect', () => {
     expect(optionNames).toContain('--toggle');
   });
 
+  it('has --verify-timeout option with a default of 500', () => {
+    const program = createProgram();
+    const cmd = program.commands.find((c) => c.name() === 'select')!;
+    const opt = cmd.options.find((o) => o.long === '--verify-timeout');
+    expect(opt).toBeDefined();
+    expect(opt?.defaultValue).toBe(500);
+  });
+
   it('has bridge options', () => {
     const program = createProgram();
     const cmd = program.commands.find((c) => c.name() === 'select')!;
@@ -130,5 +188,66 @@ describe('registerSelect', () => {
     const program = createProgram();
     const cmd = program.commands.find((c) => c.name() === 'select')!;
     expect(cmd.description()).toBe('Set the value of a form element or toggle a checkbox');
+  });
+
+  describe('with a mocked bridge', () => {
+    beforeEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    function stubFetch(result: unknown) {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ result }),
+      });
+      vi.stubGlobal('fetch', mockFetch);
+      return mockFetch;
+    }
+
+    async function runSelect(args: string[]) {
+      const program = createProgram();
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      try {
+        await program.parseAsync(['node', 'test', 'select', ...args]);
+        return logSpy.mock.calls.map((c) => String(c[0]));
+      } finally {
+        logSpy.mockRestore();
+      }
+    }
+
+    it('prints the JSON result on success', async () => {
+      stubFetch(JSON.stringify({ success: true, selector: '#cb', tagName: 'input', checked: true, verified: true }));
+      const output = await runSelect(['#cb', '--toggle']);
+      expect(JSON.parse(output[0]!)).toMatchObject({ success: true, checked: true });
+    });
+
+    it('throws with the hint when the checked state reverted', async () => {
+      stubFetch(
+        JSON.stringify({
+          success: false,
+          selector: '#cb',
+          tagName: 'input',
+          checked: false,
+          previousChecked: false,
+          verification: 'reverted',
+          error: 'Checked state reverted: click() set checked=true but the element reads false after 500ms',
+          hint: 'A controlled checkbox whose change handler did not accept the change.',
+        }),
+      );
+      await expect(runSelect(['#cb', '--toggle'])).rejects.toThrow(
+        /Checked state reverted: click\(\) set checked=true but the element reads false after 500ms\n {2}hint: A controlled checkbox/,
+      );
+    });
+
+    it('surfaces a bridge "ERROR: …" result as an actionable error', async () => {
+      stubFetch('ERROR: boom');
+      await expect(runSelect(['#sel', 'US'])).rejects.toThrow('Select failed: the bridge script threw: boom');
+    });
+
+    it('rejects an out-of-range --verify-timeout before calling the bridge', async () => {
+      const mockFetch = stubFetch(JSON.stringify({ success: true }));
+      await expect(runSelect(['#sel', 'US', '--verify-timeout', '-5'])).rejects.toThrow(/--verify-timeout/);
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
   });
 });

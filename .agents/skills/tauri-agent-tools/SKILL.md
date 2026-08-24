@@ -269,6 +269,9 @@ tauri-agent-tools type "#search" "hello world" --json
 # Clear and retype
 tauri-agent-tools type "#email" "new@email.com" --clear --json
 
+# App applies the value on a transition/async render: wait longer for it to stick
+tauri-agent-tools type "#q" "term" --verify-timeout 2000 --json
+
 # Scroll to bottom
 tauri-agent-tools scroll --to-bottom --json
 
@@ -291,6 +294,8 @@ tauri-agent-tools select "input[type=checkbox]" --toggle --json
 tauri-agent-tools invoke get_release_context --json
 tauri-agent-tools invoke save_item '{"id": 42}' --json
 ```
+
+`type` and `select` write through the native value setter (so React/Vue/Svelte controlled inputs see the change) and re-read the element afterwards. `verification: "reverted"` (exit 1, with a `hint`) means the app rolled the write back — a controlled input that rejected it — and is the app's answer, not a tooling error. `verification: "transformed"` means the app reformatted the value and counts as success.
 
 ### Probe, capture, and check (workflow commands)
 
@@ -347,11 +352,11 @@ tauri-agent-tools eval "document.title" --window-label overlay --json
 | `mutations` | `<selector>`, `--attributes`, `--duration <ms>`, `--json` | yes | Watch DOM mutations |
 | `snapshot` | `-o <prefix>`, `-s <css>`, `--window-id <id>`, `--dom-depth <n>`, `--eval <js>`, `--json` | yes | Screenshot + DOM + page state + storage |
 | `click` | `<selector>`, `--double`, `--right`, `--wait <ms>`, `--json` | yes | Click a DOM element |
-| `type` | `<selector> <text>`, `--clear`, `--json` | yes | Type text into an input |
+| `type` | `<selector> <text>`, `--clear`, `--verify-timeout <ms>`, `--json` | yes | Type text into an input (native setter, verified write) |
 | `scroll` | `--selector <css>`, `--by <px>`, `--to-top`, `--to-bottom`, `--into-view`, `--json` | yes | Scroll window or element |
 | `focus` | `<selector>`, `--json` | yes | Focus a DOM element |
 | `navigate` | `<target>`, `--json` | yes | Navigate within the app |
-| `select` | `<selector> [value]`, `--toggle`, `--json` | yes | Select dropdown or toggle checkbox |
+| `select` | `<selector> [value]`, `--toggle`, `--verify-timeout <ms>`, `--json` | yes | Select dropdown or toggle checkbox (native `click()`, verified write) |
 | `invoke` | `<command> [args-json]`, `--json` | yes | Invoke a Tauri IPC command |
 | `probe` | `--pid <n>`, `--json` | optional | Discover targets and bridge health |
 | `capture` | `-o <dir>`, `-s <css>`, `--window-id <id>`, `--logs-duration <ms>`, `--json` | yes | Full debug evidence bundle |

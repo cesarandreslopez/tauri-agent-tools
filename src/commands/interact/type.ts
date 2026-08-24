@@ -1,35 +1,34 @@
 import { Command } from 'commander';
 import { resolveBridge } from '../shared.js';
 import type { BridgeOpts } from '../shared.js';
-import { addInteractOptions, escapeSelector } from './shared.js';
+import {
+  addInteractOptions,
+  addVerifyOptions,
+  buildSetValueScript,
+  parseInteractResult,
+  resolveVerifyTimeout,
+} from './shared.js';
+import type { VerifyOptions } from './shared.js';
 import { TypeResultSchema } from '../../schemas/interact.js';
 
 /**
- * Build a JS IIFE script that types text into the element matched by selector.
+ * Build a JS IIFE that types text into the element matched by selector.
+ *
+ * Both the --clear write and the final write go through the element's native
+ * prototype value setter (see NATIVE_VALUE_WRITER_SNIPPET) so React-style
+ * instance trackers see the following input/change events as real changes
+ * (#10). The script then re-reads the value (synchronously, then polled up to
+ * verifyTimeoutMs) and reports `reverted` when the app restored the previous
+ * value. Returns a Promise-resolving IIFE; the bridge awaits it.
  */
-export function buildTypeScript(selector: string, text: string, clear: boolean): string {
-  const escapedSelector = escapeSelector(selector);
-  const safeText = JSON.stringify(text);
-
-  const clearBlock = clear
-    ? `
-    el.focus();
-    el.select();
-    el.value = '';
-    el.dispatchEvent(new Event('input', { bubbles: true }));`
-    : '';
-
-  return `(() => {
-  var el = document.querySelector('${escapedSelector}');
-  if (!el) {
-    return JSON.stringify({ success: false, selector: '${escapedSelector}', error: 'Element not found' });
-  }
-  el.focus();${clearBlock}
-  el.value = ${safeText};
-  el.dispatchEvent(new Event('input', { bubbles: true }));
-  el.dispatchEvent(new Event('change', { bubbles: true }));
-  return JSON.stringify({ success: true, selector: '${escapedSelector}', tagName: el.tagName, value: el.value });
-})()`;
+export function buildTypeScript(selector: string, text: string, clear: boolean, options?: VerifyOptions): string {
+  return buildSetValueScript(selector, text, {
+    focus: true,
+    clear,
+    lowerCaseTagName: false,
+    notFoundErrorExpr: `'Element not found'`,
+    verifyTimeoutMs: resolveVerifyTimeout(options),
+  });
 }
 
 export function registerType(program: Command): void {
@@ -42,26 +41,48 @@ export function registerType(program: Command): void {
 Examples:
   $ tauri-agent-tools type "#username" "admin"
   $ tauri-agent-tools type "input[name=email]" "user@example.com" --clear
-  $ tauri-agent-tools type ".search-input" "hello world" --json`);
+  $ tauri-agent-tools type ".search-input" "hello world" --json
+  $ tauri-agent-tools type "#q" "term" --verify-timeout 2000    # app applies the value asynchronously
+
+The value is written through the element's native prototype setter followed by
+bubbling input + change events, so React/Vue/Svelte controlled inputs see it.
+The element is then re-read; the command fails with "Value reverted" when the
+app restored the previous value (a controlled input that rejected the write).`);
 
   addInteractOptions(cmd);
+  addVerifyOptions(cmd);
 
-  cmd.action(async (selector: string, text: string, opts: BridgeOpts & { clear?: boolean; json?: boolean }) => {
-    const bridge = await resolveBridge(opts);
-    const script = buildTypeScript(selector, text, !!opts.clear);
-    const raw = await bridge.eval(script);
-    const result = TypeResultSchema.parse(JSON.parse(String(raw)));
+  cmd.action(
+    async (
+      selector: string,
+      text: string,
+      opts: BridgeOpts & { clear?: boolean; json?: boolean; verifyTimeout: number },
+    ) => {
+      // Build first: an invalid --verify-timeout fails before any bridge call.
+      const script = buildTypeScript(selector, text, !!opts.clear, { verifyTimeoutMs: opts.verifyTimeout });
+      const bridge = await resolveBridge(opts);
+      const raw = await bridge.eval(script);
+      const result = parseInteractResult(raw, TypeResultSchema, 'Type');
 
-    if (!result.success) {
-      throw new Error(`Type failed: ${result.error} (selector: ${result.selector})`);
-    }
+      if (!result.success) {
+        const hint = result.hint ? `\n  hint: ${result.hint}` : '';
+        throw new Error(`Type failed: ${result.error} (selector: ${result.selector})${hint}`);
+      }
 
-    if (opts.json) {
-      console.log(JSON.stringify(result, null, 2));
-    } else {
-      console.log(`Typed into ${(result.tagName ?? 'element').toLowerCase()}: "${result.value}"`);
-    }
-  });
+      if (opts.json) {
+        console.log(JSON.stringify(result, null, 2));
+        return;
+      }
+      const tag = (result.tagName ?? 'element').toLowerCase();
+      let note = '';
+      if (result.verification === 'transformed') {
+        note = ` (app transformed the requested value ${JSON.stringify(result.requestedValue)})`;
+      } else if (result.requestedValue !== undefined && result.value !== result.requestedValue) {
+        note = ` (browser normalized the requested value ${JSON.stringify(result.requestedValue)})`;
+      }
+      console.log(`Typed into ${tag}: "${result.value}"${note}`);
+    },
+  );
 
   program.addCommand(cmd);
 }

@@ -258,14 +258,16 @@ Monitor Rust backend logs and sidecar output in real-time. Unlike `console-monit
 
 Interaction commands dispatch DOM events inside the webview. They require the dev bridge (debug builds only).
 
+`type` and `select` write through the element's native prototype `value` setter — React's per-instance value tracker turns a plain `el.value = …` into a no-op — and dispatch bubbling `input`/`change` events, so React, Vue, and Svelte controlled inputs update their state; `select --toggle` performs a native `click()`. Both then re-read the element: a value the app rolled back fails with `Value reverted` (`Checked state reverted` for `--toggle`; exit 1, plus a `hint`, and `verification: "reverted"` in JSON) — treat that as the app's answer, not a tooling error — while a value the app reformatted is a success reported with `verification: "transformed"`. `--verify-timeout <ms>` (default 500) tunes the re-read deadline for apps that apply values asynchronously.
+
 | Command | Description |
 |---------|-------------|
 | `click <selector>` | Click a DOM element (`--double`, `--right`, `--wait <ms>`) |
-| `type <selector> <text>` | Type text into an input (`--clear` to empty first) |
+| `type <selector> <text>` | Type text into an input via the native value setter, then verify the write (`--clear` to empty first, `--verify-timeout <ms>`) |
 | `scroll` | Scroll window or element (`--by <px>`, `--to-top`, `--to-bottom`, `--into-view`) |
 | `focus <selector>` | Focus a DOM element |
 | `navigate <target>` | Navigate within the app (route path or URL) |
-| `select <selector> [value]` | Select dropdown value or toggle checkbox (`--toggle`) |
+| `select <selector> [value]` | Select a dropdown value or toggle a checkbox via native `click()`, then verify the write (`--toggle`, `--verify-timeout <ms>`) |
 | `invoke <command> [args-json]` | Invoke a Tauri IPC command |
 
 ### Workflow Commands

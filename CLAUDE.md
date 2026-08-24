@@ -81,6 +81,7 @@ npx vitest run tests/commands/screenshot.test.ts
 - **Process execution:** Always use `execFile()` with array args (via `src/util/exec.ts`). Never use `exec()` with shell strings — prevents command injection.
 - **Window ID validation:** All window IDs must match `/^\d+$/` before being passed to external tools. See `validateWindowId()` in `src/util/exec.ts`.
 - **Vitest globals:** Tests use `describe`, `it`, `expect` without imports (configured in `vitest.config.ts`).
+- **jsdom fixture:** `tests/integration/react-controlled-forms.test.ts` is the only jsdom-environment test (per-file `// @vitest-environment jsdom`, real React via `react-dom`); every other test file runs in node.
 - **Commit messages:** Follow [Conventional Commits](https://www.conventionalcommits.org/) — `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`.
 - **Branch naming:** `feature/<name>`, `fix/<name>`, `docs/<name>`, `refactor/<name>`.
 
@@ -121,7 +122,7 @@ Dependencies flow strictly downward. Enforced by `scripts/check-imports.mjs`.
 
 ```bash
 npx tsc --noEmit                              # Type check
-npm test                                      # All tests (784+ tests, 66 files)
+npm test                                      # All tests (870+ tests, 67 files)
 node scripts/check-imports.mjs                # Import DAG linter
 node scripts/check-bridge-parity.mjs          # Bridge endpoint/min-version parity (also part of npm run lint)
 npx madge --circular --extensions ts,tsx src/  # Circular dependency check

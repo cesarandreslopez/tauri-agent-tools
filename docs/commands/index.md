@@ -21,11 +21,11 @@ tauri-agent-tools provides 38 commands for inspecting, interacting with, monitor
 | [`mutations`](mutations.md) | Yes | Watch DOM mutations on a CSS selector |
 | [`snapshot`](snapshot.md) | Yes | Capture screenshot + DOM + page state + storage in one shot |
 | `click` | Yes | Click a DOM element |
-| `type` | Yes | Type text into an input |
+| `type` | Yes | Type text into an input (native value setter, verified write) |
 | `scroll` | Yes | Scroll window or element |
 | `focus` | Yes | Focus a DOM element |
 | `navigate` | Yes | Navigate within the app |
-| `select` | Yes | Select dropdown value or toggle checkbox |
+| `select` | Yes | Select dropdown value or toggle checkbox (native setter / `click()`, verified write) |
 | `invoke` | Yes | Invoke a Tauri IPC command |
 | `probe` | Optional | Discover running bridges and check health; reports `target.alive: false` instead of erroring when none found |
 | `capture` | Yes | Full debug evidence bundle |
@@ -80,11 +80,11 @@ tauri-agent-tools provides 38 commands for inspecting, interacting with, monitor
 ### Interaction (debug-only)
 
 - **click** — click, double-click, or right-click a DOM element
-- **type** — type text into an input field (supports `--clear`)
+- **type** — type text into an input field through the native value setter and verify the write (supports `--clear`, `--verify-timeout`)
 - **scroll** — scroll by pixels, to top/bottom, or scroll an element into view
 - **focus** — focus a DOM element
 - **navigate** — navigate to a route or URL
-- **select** — select a dropdown value or toggle a checkbox
+- **select** — select a dropdown value or toggle a checkbox via native `click()`, verifying the write
 - **invoke** — call a Tauri IPC command with JSON payload
 
 ### Workflow

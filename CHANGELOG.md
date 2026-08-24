@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+`type` and `select` now reach framework-controlled inputs and verify their writes. Additive and backwards-compatible — no flag changed meaning, all result-schema additions are optional-only, and no bridge change is required.
+
+### Fixed
+
+- **`type` and `select` no longer report success while React ignores the value** ([#10](https://github.com/cesarandreslopez/tauri-agent-tools/issues/10), reported by [@papercupai](https://github.com/papercupai)). Values are written through the element's native prototype `value` setter (`HTMLInputElement`/`HTMLTextAreaElement`/`HTMLSelectElement.prototype`; custom elements are resolved up their prototype chain) instead of `el.value = …`, which react-dom's instance-level value tracker turns into a no-op — the command read back its own write and reported success while React state never changed and the DOM reverted on the next render. Both the `--clear` write and the final write use the native setter. `select --toggle` now performs a native `click()` (React only observes `click` for checkbox/radio) instead of assigning `el.checked` and firing a synthetic `change`, which never reached React either.
+- `type`/`select` scripts are wrapped in `try/catch` and always return JSON; a bridge `ERROR: …` payload or non-JSON result now surfaces as an actionable error instead of a `SyntaxError` from `JSON.parse`. `el.select()` is guarded (absent on `<select>` and custom elements), and `select` values are JSON-escaped, so values containing newlines no longer produce a script syntax error.
+
+### Added
+
+- **Write verification for `type` and `select`** — after dispatching `input`/`change` the element is re-read synchronously and then polled (50 ms, default deadline 500 ms). The outcome is reported in new optional result fields `verified`, `verification` (`matched` | `transformed` | `reverted`), `requestedValue`, `previousValue` (`previousChecked` for `--toggle`), `options`, and `hint`. A write the app rolls back (`reverted`) fails with `Value reverted: …` (`Checked state reverted: …` for `--toggle`) plus a hint — `verification: "reverted"` is the stable signal for scripts; a value the app reformats (masks, formatters) is a success with `verified: false`. The `reverted` baseline is taken after `focus()`/`--clear` have settled, so an app that accepts the clear (or reformats the value on focus) but rejects the real write is still reported as reverted. A value the browser itself discards or clamps back (e.g. `abc` into `type=number`, `50` into a `type=range` capped at 10) fails with `Browser discarded the value: …` / `Browser did not take the value: …` before any event is dispatched, and the previous value is restored; a field the app empties after a non-empty write fails with `Value cleared: …`; an element that leaves the document (or is re-mounted) after focus/`--clear` is re-resolved by selector before the write, and one that disappears after the write fails explicitly instead of being verified against a stale node. Custom elements that reflect `value` asynchronously are verified against the requested value. `--verify-timeout <ms>` (0–4000; 0 = single synchronous check) tunes the deadline for apps that apply values on a transition/async render. Detection is React-specific by construction (React restores controlled values synchronously inside `dispatchEvent`); frameworks that leave a rejected value in the DOM are reported as `matched`.
+- `type` and `select` fail fast with the available `options` when the target is a `<select>` with no `<option>` matching the value (previously reported success with `value: ""`).
+- Shared helpers in `src/commands/interact/shared.ts` (`buildSetValueScript()`, the `NATIVE_VALUE_WRITER`/`VERIFY_POLL`/`SETTLE`/`SELECT_OPTIONS` snippets, the verify-timeout constants and option wiring, `parseInteractResult()`) and `WriteVerificationSchema` in `src/schemas/interact.ts`.
+- Regression fixture `tests/integration/react-controlled-forms.test.ts` runs the generated scripts against a real React 19 tree in jsdom (controlled input/textarea/select/checkbox/radio, reject and transform paths, transition-fed values, custom elements, and negative controls using the pre-fix scripts). `react`, `react-dom`, and `jsdom` are added as devDependencies only.
+
+### Changed
+
+- `type` refuses `<input type=checkbox|radio>` (hint: `select --toggle`), `<input type=file>`, and elements with no value setter such as contenteditable `<div>`s (previously it set an expando property and reported success). Human output appends a note when the app transformed or the browser normalized the requested value.
+- `select --toggle` refuses non-checkable, disabled (including `<fieldset disabled>` descendants), and already-checked radio elements; because it now clicks, the element's click handlers run, as they would for a user click.
+- `select` value mode dispatches `input` before `change` (native order; previously change then input).
+- Only a `matched` write resolves immediately; `reverted` and `transformed` outcomes wait out the full `--verify-timeout` (default 500 ms) before being classified.
+
 ## [0.9.1] - 2026-07-21
 
 Window targeting by platform id: the window-consuming commands can now skip the title-regex path entirely. Additive and backwards-compatible — no flag changed meaning and all output additions are optional-only.
