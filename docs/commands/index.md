@@ -84,7 +84,7 @@ tauri-agent-tools provides 38 commands for inspecting, interacting with, monitor
 - **scroll** — scroll by pixels, to top/bottom, or scroll an element into view
 - **focus** — focus a DOM element
 - **navigate** — navigate to a route or URL
-- **select** — select a dropdown value or toggle a checkbox via native `click()`, verifying the write
+- **select** — select a dropdown value via the native value setter, or toggle a checkbox via native `click()`, verifying the write
 - **invoke** — call a Tauri IPC command with JSON payload
 
 ### Workflow

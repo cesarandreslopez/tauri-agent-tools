@@ -288,10 +288,14 @@ export function buildSetValueScript(selector: string, value: string, o: SetValue
       writer.set(requested);
       var applied = String(el.value);
       if (writer.kind === 'native' && requested !== '' && applied === '') {
-        writer.set(previousValue);
+        // Undo our own writes only: after --clear that is the pre-clear value;
+        // otherwise the value the field held right before the write (which an
+        // app may have changed on focus).
+        var restored = clearRan ? previousValue : baseline;
+        writer.set(restored);
         if (clearRan) el.dispatchEvent(new Event('input', { bubbles: true }));
         return fail(Object.assign({
-          value: previousValue,
+          value: restored,
           error: 'Browser discarded the value: ' + describe(el) + ' sanitized ' + JSON.stringify(requested) + ' to ""',
           hint: 'Use a value the control accepts (e.g. digits for type=number, YYYY-MM-DD for type=date). The previous value was restored' + (clearRan ? ' (the field had already been cleared, so an input event was dispatched for the restore).' : ' and no events were dispatched.')
         }, base));

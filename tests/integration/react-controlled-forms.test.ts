@@ -418,6 +418,22 @@ describe('type against a real React controlled input (#10)', () => {
     expect(seen).toEqual([]);
   });
 
+  it('(i5) a browser-discarded value restores what the field held right before the write, not the pre-focus value', async () => {
+    document.body.insertAdjacentHTML('beforeend', '<input id="num" type="number" value="">');
+    const el = document.querySelector('#num') as HTMLInputElement;
+    el.addEventListener('focus', () => {
+      el.value = '10';
+    });
+    const seen: string[] = [];
+    el.addEventListener('input', () => seen.push('input'));
+    const r = await typeViaCli('#num', 'abc');
+    expect(r.success).toBe(false);
+    expect(String(r.error)).toContain('Browser discarded the value');
+    expect(r).toMatchObject({ value: '10', previousValue: '', requestedValue: 'abc' });
+    expect(el.value).toBe('10');
+    expect(seen).toEqual([]);
+  });
+
   it('(j2) a custom element that reflects value asynchronously is verified against the request', async () => {
     if (!customElements.get('async-input')) {
       customElements.define(
@@ -627,5 +643,20 @@ describe('select against real React controlled elements', () => {
     const r = await selectViaCli('#d', undefined, true);
     expect(r.success).toBe(false);
     expect(String(r.error)).toContain('not a checkbox or radio');
+  });
+
+  it('(s11) --toggle on a checkbox the app unmounts in its change handler fails explicitly instead of reading the detached node', async () => {
+    function SelfRemovingCheckbox(_p: { handles: Handles }) {
+      const [gone, setGone] = useState(false);
+      if (gone) return createElement('span', { id: 'removed' });
+      return createElement('input', { id: 'cb', type: 'checkbox', checked: false, onChange: () => setGone(true) });
+    }
+    mount(SelfRemovingCheckbox);
+    const r = await selectViaCli('#cb', undefined, true);
+    expect(document.querySelector('#cb')).toBeNull();
+    expect(document.querySelector('#removed')).not.toBeNull();
+    expect(r).toMatchObject({ success: false, verified: false, previousChecked: false });
+    expect(String(r.error)).toContain('left the document');
+    expect(r.verification).toBeUndefined();
   });
 });

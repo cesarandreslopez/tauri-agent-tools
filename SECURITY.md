@@ -10,7 +10,7 @@
 
 tauri-agent-tools is designed with security as a core principle:
 
-- **Read-only operations** — no input injection, no state modification, no mouse/keyboard simulation
+- **No native input injection** — no `xdotool`/Accessibility-API keyboard or mouse simulation. Inspection commands are read-only; interaction commands (`click`, `type`, `select`, `scroll`, `focus`, `navigate`, `invoke`) act only through JavaScript evaluated inside the webview via the debug-only bridge and cannot reach the OS or other applications
 - **`execFile()` only** — all OS commands use `execFile()` with array arguments, never `exec()` with shell strings (prevents command injection)
 - **Token authentication** — bridge communication requires a random 32-character token
 - **Localhost only** — bridge binds to `127.0.0.1`, never exposed to the network

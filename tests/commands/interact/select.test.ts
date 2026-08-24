@@ -92,6 +92,14 @@ describe('buildSelectScript', () => {
       expect(script).toContain('Checked state reverted');
     });
 
+    it('fails explicitly when the clicked element leaves the document instead of reading the detached node', () => {
+      const script = buildSelectScript('#cb', undefined, true);
+      expect(script).toContain('document.querySelector(selector) || (el.isConnected ? el : null)');
+      expect(script).toContain('return cur ? !!cur.checked : null;');
+      expect(script).toContain('if (v.observed === null)');
+      expect(script).toContain('Element left the document after click()');
+    });
+
     it('does not set el.value in toggle mode', () => {
       const script = buildSelectScript('#checkbox', 'ignored', true);
       expect(script).not.toContain('el.value');
@@ -204,15 +212,24 @@ describe('registerSelect', () => {
       return mockFetch;
     }
 
-    async function runSelect(args: string[]) {
+    /** Runs `select`, returning what reached stdout plus the rejection (if any) — for failure-path assertions. */
+    async function runSelectCapturing(args: string[]): Promise<{ logs: string[]; error?: Error }> {
       const program = createProgram();
       const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
       try {
         await program.parseAsync(['node', 'test', 'select', ...args]);
-        return logSpy.mock.calls.map((c) => String(c[0]));
+        return { logs: logSpy.mock.calls.map((c) => String(c[0])) };
+      } catch (err) {
+        return { logs: logSpy.mock.calls.map((c) => String(c[0])), error: err as Error };
       } finally {
         logSpy.mockRestore();
       }
+    }
+
+    async function runSelect(args: string[]) {
+      const { logs, error } = await runSelectCapturing(args);
+      if (error) throw error;
+      return logs;
     }
 
     it('prints the JSON result on success', async () => {
@@ -237,6 +254,43 @@ describe('registerSelect', () => {
       await expect(runSelect(['#cb', '--toggle'])).rejects.toThrow(
         /Checked state reverted: click\(\) set checked=true but the element reads false after 500ms\n {2}hint: A controlled checkbox/,
       );
+    });
+
+    it('prints the failure object to stdout before exiting non-zero (verification: "reverted")', async () => {
+      stubFetch(
+        JSON.stringify({
+          success: false,
+          selector: '#cb',
+          tagName: 'input',
+          checked: false,
+          previousChecked: false,
+          verified: false,
+          verification: 'reverted',
+          error: 'Checked state reverted: click() set checked=true but the element reads false after 500ms',
+          hint: 'A controlled checkbox whose change handler did not accept the change.',
+        }),
+      );
+      const { logs, error } = await runSelectCapturing(['#cb', '--toggle']);
+      expect(error?.message).toMatch(/^Checked state reverted/);
+      expect(logs).toHaveLength(1);
+      expect(JSON.parse(logs[0]!)).toMatchObject({ success: false, verification: 'reverted', previousChecked: false, verified: false });
+    });
+
+    it('prints the available options to stdout when no <option> matches the value', async () => {
+      stubFetch(
+        JSON.stringify({
+          success: false,
+          selector: '#sel',
+          tagName: 'select',
+          requestedValue: 'Canada',
+          options: ['CA', 'US'],
+          error: 'No <option> with value "Canada"',
+          hint: 'Pass the option value attribute, not its label. Available values: CA, US',
+        }),
+      );
+      const { logs, error } = await runSelectCapturing(['#sel', 'Canada']);
+      expect(error?.message).toMatch(/^No <option> with value "Canada"\n {2}hint: Pass the option value attribute/);
+      expect(JSON.parse(logs[0]!)).toMatchObject({ success: false, options: ['CA', 'US'], requestedValue: 'Canada' });
     });
 
     it('surfaces a bridge "ERROR: …" result as an actionable error', async () => {

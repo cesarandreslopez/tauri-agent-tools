@@ -65,6 +65,10 @@ app restored the previous value (a controlled input that rejected the write).`);
       const result = parseInteractResult(raw, TypeResultSchema, 'Type');
 
       if (!result.success) {
+        // With --json the failure object (verification, hint, options, …) goes to
+        // stdout so scripts can branch on it; the thrown error still reaches
+        // stderr and sets exit code 1.
+        if (opts.json) console.log(JSON.stringify(result, null, 2));
         const hint = result.hint ? `\n  hint: ${result.hint}` : '';
         throw new Error(`Type failed: ${result.error} (selector: ${result.selector})${hint}`);
       }

@@ -1,7 +1,7 @@
 ---
 name: tauri-debug-quickstart
 description: First-30-seconds triage for a broken Tauri desktop app. Pick the right command for the symptom you're seeing, with one-line escalations to deeper skills.
-version: 0.9.1
+version: 0.9.2
 tags: [tauri, debugging, triage, quickstart, decision-tree, logs, process-tree, bundle, forensics, diagnose]
 ---
 

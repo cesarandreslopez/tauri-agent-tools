@@ -1,7 +1,7 @@
 ---
 name: tauri-agent-tools
 description: CLI for inspecting and interacting with Tauri desktop apps — DOM queries, screenshots, interaction (click/type/scroll), IPC monitoring, store inspection, structured assertions, plus bridge-free diagnostics (unified cross-layer logs, deep OS process trees, OS logs, app paths, sidecar NDJSON tap/replay, forensic bundles) and the `diagnose`/`bundle` super-commands for one-shot triage. Works against older/vendored bridges by degrading gracefully.
-version: 0.9.1
+version: 0.9.2
 tags: [tauri, desktop, debugging, screenshot, dom, inspection, diff, mutations, snapshot, interaction, click, type, scroll, invoke, probe, capture, check, store-inspect, logs, bundle, process-tree, forensics, os-logs, app-paths, sidecar, config-inspect, diagnose]
 ---
 
@@ -295,7 +295,7 @@ tauri-agent-tools invoke get_release_context --json
 tauri-agent-tools invoke save_item '{"id": 42}' --json
 ```
 
-`type` and `select` write through the native value setter (so React/Vue/Svelte controlled inputs see the change) and re-read the element afterwards. `verification: "reverted"` (exit 1, with a `hint`) means the app rolled the write back — a controlled input that rejected it — and is the app's answer, not a tooling error. `verification: "transformed"` means the app reformatted the value and counts as success.
+`type` and `select <value>` write through the element's native `value` setter (so React/Vue/Svelte controlled inputs see the change); `select --toggle` performs a native `click()`. Both then re-read the element. `verification: "reverted"` in the failure JSON (exit 1, with a `hint`; `type` prints it with `--json`, `select` always) means the app rolled the write back — a controlled input that rejected it — and is the app's answer, not a tooling error. `verification: "transformed"` means the app reformatted the value and counts as success (`verified: false`).
 
 ### Probe, capture, and check (workflow commands)
 
@@ -356,7 +356,7 @@ tauri-agent-tools eval "document.title" --window-label overlay --json
 | `scroll` | `--selector <css>`, `--by <px>`, `--to-top`, `--to-bottom`, `--into-view`, `--json` | yes | Scroll window or element |
 | `focus` | `<selector>`, `--json` | yes | Focus a DOM element |
 | `navigate` | `<target>`, `--json` | yes | Navigate within the app |
-| `select` | `<selector> [value]`, `--toggle`, `--verify-timeout <ms>`, `--json` | yes | Select dropdown or toggle checkbox (native `click()`, verified write) |
+| `select` | `<selector> [value]`, `--toggle`, `--verify-timeout <ms>`, `--json` | yes | Select dropdown or toggle checkbox (native setter; `--toggle` via native `click()`; verified write) |
 | `invoke` | `<command> [args-json]`, `--json` | yes | Invoke a Tauri IPC command |
 | `probe` | `--pid <n>`, `--json` | optional | Discover targets and bridge health |
 | `capture` | `-o <dir>`, `-s <css>`, `--window-id <id>`, `--logs-duration <ms>`, `--json` | yes | Full debug evidence bundle |

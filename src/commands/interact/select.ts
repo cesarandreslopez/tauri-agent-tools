@@ -50,11 +50,18 @@ function buildToggleScript(selector: string, verifyTimeoutMs: number): string {
     var expected = !before;
     el.click();
     return __verify(function () {
-      var cur = document.querySelector(selector) || el;
-      return !!cur.checked;
+      var cur = document.querySelector(selector) || (el.isConnected ? el : null);
+      return cur ? !!cur.checked : null;
     }, expected, ${verifyTimeoutMs}, ${VERIFY_INTERVAL_MS}).then(function (v) {
       if (v.ok) {
         return JSON.stringify({ success: true, selector: selector, tagName: tagName, checked: v.observed, previousChecked: before, verified: true, verification: 'matched' });
+      }
+      if (v.observed === null) {
+        return fail({
+          tagName: tagName, previousChecked: before, verified: false,
+          error: 'Element left the document after click(); the checked state could not be verified',
+          hint: 'The app removed or re-rendered the element without a matching selector after the click (navigation, a remount, or the click consumed the item). Re-query the DOM to confirm the app state.'
+        });
       }
       return fail({
         tagName: tagName, checked: !!v.observed, previousChecked: before, verified: false, verification: 'reverted',
@@ -121,11 +128,14 @@ the command fails when the app reverted the change.`);
       const bridge = await resolveBridge(opts);
       const raw = await bridge.eval(script);
       const result = parseInteractResult(raw, SelectResultSchema, 'Select');
+      // select always prints its JSON result; on failure the object (verification,
+      // hint, options, …) still goes to stdout, and the thrown error reaches
+      // stderr and sets exit code 1.
+      console.log(JSON.stringify(result, null, 2));
       if (!result.success) {
         const hint = result.hint ? `\n  hint: ${result.hint}` : '';
         throw new Error(`${result.error ?? 'Select failed'}${hint}`);
       }
-      console.log(JSON.stringify(result, null, 2));
     },
   );
 

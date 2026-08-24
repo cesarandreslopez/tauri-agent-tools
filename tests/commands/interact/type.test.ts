@@ -107,7 +107,8 @@ describe('buildTypeScript', () => {
   it('refuses a value the browser sanitizes away and restores the baseline', () => {
     const script = buildTypeScript('#n', 'abc', false);
     expect(script).toContain("writer.kind === 'native' && requested !== '' && applied === ''");
-    expect(script).toContain('writer.set(previousValue)');
+    expect(script).toContain('var restored = clearRan ? previousValue : baseline;');
+    expect(script).toContain('writer.set(restored)');
     expect(script).toContain('Browser discarded the value');
     expect(script).toContain('Browser did not take the value');
     expect(script).toContain('Value cleared');
@@ -212,7 +213,8 @@ describe('registerType command integration', () => {
     return mockFetch;
   }
 
-  async function runType(args: string[]) {
+  /** Runs `type`, returning what reached stdout plus the rejection (if any) — for failure-path assertions. */
+  async function runTypeCapturing(args: string[]): Promise<{ logs: string[]; error?: Error }> {
     const { Command } = await import('commander');
     const { registerType } = await import('../../../src/commands/interact/type.js');
     const program = new Command();
@@ -221,10 +223,18 @@ describe('registerType command integration', () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     try {
       await program.parseAsync(['node', 'test', 'type', ...args]);
-      return logSpy.mock.calls.map((c) => String(c[0]));
+      return { logs: logSpy.mock.calls.map((c) => String(c[0])) };
+    } catch (err) {
+      return { logs: logSpy.mock.calls.map((c) => String(c[0])), error: err as Error };
     } finally {
       logSpy.mockRestore();
     }
+  }
+
+  async function runType(args: string[]) {
+    const { logs, error } = await runTypeCapturing(args);
+    if (error) throw error;
+    return logs;
   }
 
   it('types text and prints human-readable output', async () => {
@@ -287,6 +297,40 @@ describe('registerType command integration', () => {
     await expect(runType(['#q', 'sentinel'])).rejects.toThrow(
       /Type failed: Value reverted: wrote "sentinel" but the element reads "" again after 500ms \(selector: #q\)\n {2}hint: The app restored the previous value\./,
     );
+  });
+
+  it('prints the failure object to stdout with --json before exiting non-zero (verification: "reverted")', async () => {
+    stubFetch(
+      JSON.stringify({
+        success: false,
+        selector: '#q',
+        tagName: 'INPUT',
+        value: '',
+        requestedValue: 'sentinel',
+        previousValue: '',
+        verified: false,
+        verification: 'reverted',
+        error: 'Value reverted: wrote "sentinel" but the element reads "" again after 500ms',
+        hint: 'The app restored the previous value.',
+      }),
+    );
+    const { logs, error } = await runTypeCapturing(['#q', 'sentinel', '--json']);
+    expect(error?.message).toMatch(/^Type failed: Value reverted/);
+    expect(logs).toHaveLength(1);
+    expect(JSON.parse(logs[0]!)).toMatchObject({
+      success: false,
+      verification: 'reverted',
+      requestedValue: 'sentinel',
+      previousValue: '',
+      hint: 'The app restored the previous value.',
+    });
+  });
+
+  it('prints nothing to stdout on failure without --json', async () => {
+    stubFetch(JSON.stringify({ success: false, selector: '#q', tagName: 'INPUT', error: 'Element not found' }));
+    const { logs, error } = await runTypeCapturing(['#q', 'sentinel']);
+    expect(error?.message).toMatch(/^Type failed: Element not found/);
+    expect(logs).toEqual([]);
   });
 
   it('notes an app-transformed value in human output', async () => {

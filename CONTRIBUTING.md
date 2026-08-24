@@ -80,7 +80,7 @@ tauri-agent-tools/
 - **ESM imports** — always use `.js` extensions (NodeNext resolution)
 - **Security first** — use `execFile()` with array args, never `exec()` with shell strings
 - **Window ID validation** — validate with `/^\d+$/` before passing to external tools
-- **Read-only** — no input injection, no state modification commands
+- **Inspection is read-only, interaction is debug-only** — inspection commands never modify app state; interaction commands (click, type, scroll, focus, navigate, select, invoke) act only through JavaScript evaluated in the webview via the dev bridge (debug builds), never native input injection
 
 ## Branch Naming
 

@@ -44,8 +44,13 @@ Each command file exports a `registerXxx(program, ...)` function:
 `src/commands/shared.ts` provides shared utilities:
 
 - `addBridgeOptions(cmd)` — adds `--port`, `--token`, `--pid`, and `--window-label` options to a command
-- `addInteractOptions(cmd)` — extends `addBridgeOptions` with `--json` flag for interaction commands
 - `resolveBridge(opts)` — auto-discovers or uses explicit bridge config, returns `BridgeClient`
+
+`src/commands/interact/shared.ts` provides the interaction-command helpers:
+
+- `addInteractOptions(cmd)` — extends `addBridgeOptions` with `--json` flag for interaction commands
+- `addVerifyOptions(cmd)` — adds `--verify-timeout <ms>` (default 500, range 0–4000) to `type` and `select`
+- `buildSetValueScript()` / `parseInteractResult()` — native-setter write + verification script builder and result parser used by `type` and `select`
 
 ## Platform Adapter Interface
 
@@ -118,6 +123,7 @@ Also exports `discoverBridgesByPid()` for `list-windows` to map PIDs to bridge c
 | `src/cli.ts` | Entry point — registers commands |
 | `src/types.ts` | Shared types |
 | `src/commands/shared.ts` | Bridge option wiring |
+| `src/commands/interact/shared.ts` | Interaction option wiring, native-setter write/verify scripts |
 | `src/platform/detect.ts` | Display server detection |
 | `src/bridge/client.ts` | HTTP bridge client |
 | `src/bridge/tokenDiscovery.ts` | Token file scanning |
