@@ -1,4 +1,4 @@
-import { readdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { readdir, readFile, lstat, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { Buffer } from 'node:buffer';
@@ -47,6 +47,9 @@ export type RedactDirIssueReason =
   | 'stat_failed'
   | 'read_failed'
   | 'write_failed'
+  | 'symlink'
+  | 'unsupported_file'
+  | 'residual_secret'
   | 'image_unredacted';
 
 export interface RedactDirIssue {
@@ -71,6 +74,14 @@ export interface ResidualSecretHit {
 type TextReplacement = string | ((match: string, ...groups: string[]) => string);
 
 const TEXT_PATTERNS: Array<{ re: RegExp; replacement: TextReplacement }> = [
+  {
+    re: /\b(?:sk-ant-|sk-|ghp_|xoxb-)[A-Za-z0-9_-]{16,}/g,
+    replacement: REDACTED,
+  },
+  {
+    re: /(--(?:token|api[_-]?key|secret|password|authorization)(?:=|\s+))(?:"[^"]*"|'[^']*'|[^\s]+)/gi,
+    replacement: '$1[REDACTED]',
+  },
   {
     re: /\bBearer\s+[A-Za-z0-9._~+/-]+=*/gi,
     replacement: 'Bearer [REDACTED]',
@@ -143,44 +154,59 @@ export function redactJson(value: unknown): unknown {
   return redactJsonWithStats(value).value;
 }
 
-export async function redactDir(dir: string): Promise<RedactDirResult> {
+export async function redactDir(dir: string, opts: { verify?: boolean; relativeTo?: string } = {}): Promise<RedactDirResult> {
   const result: RedactDirResult = { redactions: 0, failures: [], warnings: [] };
   const entries = await readdir(dir).catch((error: unknown) => {
-    result.warnings.push({ path: dir, reason: 'readdir_failed', message: errorMessage(error) });
+    result.failures.push({ path: dir, reason: 'readdir_failed', message: errorMessage(error) });
     return null;
   });
   if (entries == null) return result;
 
   for (const name of entries) {
     const full = join(dir, name);
-    const st = await stat(full).catch((error: unknown) => {
-      result.warnings.push({ path: full, reason: 'stat_failed', message: errorMessage(error) });
+    const st = await lstat(full).catch((error: unknown) => {
+      result.failures.push({ path: full, reason: 'stat_failed', message: errorMessage(error) });
       return null;
     });
     if (!st) continue;
+    if (st.isSymbolicLink()) {
+      result.failures.push({ path: full, reason: 'symlink' });
+      continue;
+    }
     if (st.isDirectory()) {
-      mergeRedactDirResult(result, await redactDir(full));
+      mergeRedactDirResult(result, await redactDir(full, opts));
+      continue;
+    }
+    if (!st.isFile()) {
+      result.failures.push({ path: full, reason: 'unsupported_file' });
       continue;
     }
     if (!TEXT_FILE_RE.test(name)) {
       if (IMAGE_FILE_RE.test(name)) {
         result.warnings.push({ path: full, reason: 'image_unredacted' });
+      } else if (opts.verify) {
+        result.failures.push({ path: full, reason: 'unsupported_file' });
       }
       continue;
     }
 
     const original = await readFile(full, 'utf-8').catch((error: unknown) => {
-      result.warnings.push({ path: full, reason: 'read_failed', message: errorMessage(error) });
+      result.failures.push({ path: full, reason: 'read_failed', message: errorMessage(error) });
       return null;
     });
     if (original == null) continue;
 
-    const structured = redactStructuredText(original, name);
+    const content = opts.relativeTo ? original.split(opts.relativeTo).join('.') : original;
+    const structured = redactStructuredText(content, name);
     const redacted = structured.structured
       ? { value: structured.value, redactions: 0 }
       : redactTextWithStats(structured.value);
     const next = redacted.value;
     const redactionCount = structured.redactions + redacted.redactions;
+
+    if (opts.verify && scanResidualSecrets(next, full).length > 0) {
+      result.failures.push({ path: full, reason: 'residual_secret', message: 'Possible credential remains after redaction' });
+    }
 
     if (next !== original) {
       try {
@@ -321,13 +347,21 @@ function mergeRedactDirResult(target: RedactDirResult, source: RedactDirResult):
 
 function redactJsonWithStats(value: unknown): RedactionResult<unknown> {
   if (typeof value === 'string') {
+    if (/^\s*[[{]/.test(value)) {
+      try {
+        const inner = redactJsonWithStats(JSON.parse(value) as unknown);
+        return { value: JSON.stringify(inner.value), redactions: inner.redactions };
+      } catch { /* ordinary text */ }
+    }
     return redactTextWithStats(value);
   }
 
   if (Array.isArray(value)) {
     let redactions = 0;
-    const items = value.map((item) => {
-      const redacted = redactJsonWithStats(item);
+    const items = value.map((item, index) => {
+      const previous: unknown = value[index - 1];
+      const secretArgument = typeof previous === 'string' && /^--(?:token|api[_-]?key|secret|password|authorization)$/i.test(previous);
+      const redacted = secretArgument ? maskJsonValue(item) : redactJsonWithStats(item);
       redactions += redacted.redactions;
       return redacted.value;
     });
@@ -338,7 +372,8 @@ function redactJsonWithStats(value: unknown): RedactionResult<unknown> {
     let redactions = 0;
     const next: Record<string, unknown> = {};
     for (const [key, child] of Object.entries(value)) {
-      if (SECRET_KEY_RE.test(key)) {
+      const storageKey = value['key'] ?? value['name'];
+      if (SECRET_KEY_RE.test(key) || (key === 'value' && typeof storageKey === 'string' && SECRET_KEY_RE.test(storageKey))) {
         const masked = maskJsonValue(child);
         redactions += masked.redactions;
         next[key] = masked.value;

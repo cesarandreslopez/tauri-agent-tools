@@ -1,10 +1,13 @@
 import { Command } from 'commander';
 import { spawn } from 'node:child_process';
-import { mkdir, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { basename, dirname, join, relative, resolve } from 'node:path';
 import { addBridgeOptions, type BridgeOpts } from './shared.js';
 import { exec } from '../util/exec.js';
-import { redactDir } from '../util/redactText.js';
+import { redactDir, redactJson, redactText, scanResidualSecrets } from '../util/redactText.js';
+import { artifactFiles, publishArtifacts, publishFile } from '../util/incidentFiles.js';
+import { CliError } from '../util/errors.js';
 
 interface BundleOpts extends BridgeOpts {
   config?: string;
@@ -40,92 +43,89 @@ export function registerBundle(program: Command): void {
 
   cmd.action(async (opts: BundleOpts) => {
     const outDir = opts.out ?? `./bundle-${timestampSlug()}`;
-    await mkdir(outDir, { recursive: true });
-
-    const outcomes: PhaseOutcome[] = [];
-
-    // ── Merged logs (bridge-optional + on-disk files) ───────────────────────
-    {
-      const args = ['logs', '--json'];
-      if (opts.config) args.push('--config', opts.config);
-      if (opts.identifier) args.push('--identifier', opts.identifier);
-      forwardBridge(args, opts);
-      outcomes.push(await runCapturingStdout(args, join(outDir, 'logs.ndjson')));
-    }
-
-    // ── Deep OS process tree ────────────────────────────────────────────────
-    {
-      const args = ['process-tree', '--deep', '--json'];
-      forwardBridge(args, opts);
-      outcomes.push(await runCapturingStdout(args, join(outDir, 'process-tree.json')));
-    }
-
-    // ── App paths ───────────────────────────────────────────────────────────
-    {
-      const args = ['app-paths', '--platform', 'all', '--exists', '--json'];
-      if (opts.config) args.push('--config', opts.config);
-      if (opts.identifier) args.push('--identifier', opts.identifier);
-      outcomes.push(await runCapturingStdout(args, join(outDir, 'app-paths.json')));
-    }
-
-    // ── Forensics bundle (bridge-free; works on a dead app) ─────────────────
-    {
-      const args = ['forensics', '-o', join(outDir, 'forensics')];
-      if (opts.config) args.push('--config', opts.config);
-      if (opts.identifier) args.push('--identifier', opts.identifier);
-      if (opts.since) args.push('--since', opts.since);
-      outcomes.push(await runToDir('forensics', args));
-    }
-
-    // ── Optional UI capture (needs a live bridge + screenshot tools) ────────
-    if (opts.withCapture) {
-      const args = ['capture', '-o', join(outDir, 'capture'), '--json'];
-      forwardBridge(args, opts);
-      outcomes.push(await runToDir('capture', args));
-    }
-
-    // ── Redact obvious secrets across all collected text files ──────────────
-    const redacted = await redactDir(outDir);
-    outcomes.push({
-      phase: 'redact',
-      ok: redacted.failures.length === 0,
-      detail: `redacted ${redacted.redactions} value(s), ${redacted.warnings.length} warning(s), ${redacted.failures.length} failure(s)`,
-    });
-
-    // ── Summary ─────────────────────────────────────────────────────────────
-    const summary = {
-      outDir,
-      createdPhases: outcomes,
-      ok: outcomes.filter((o) => o.ok).length,
-      total: outcomes.length,
-    };
-    await writeFile(join(outDir, 'summary.json'), JSON.stringify(summary, null, 2));
-    await writeFile(join(outDir, 'summary.md'), renderSummary(outDir, outcomes));
-
-    // ── Archive ─────────────────────────────────────────────────────────────
-    let archivePath: string | null = null;
-    if (opts.archive !== false) {
-      archivePath = `${outDir.replace(/\/+$/, '')}.tar.gz`;
-      try {
-        await exec('tar', ['-czf', archivePath, '-C', dirnameOf(outDir), basenameOf(outDir)]);
-        outcomes.push({ phase: 'archive', ok: true, detail: `→ ${archivePath}` });
-      } catch (e) {
-        archivePath = null;
-        outcomes.push({
-          phase: 'archive',
-          ok: false,
-          detail: e instanceof Error ? e.message : String(e),
-        });
+    const output = resolve(outDir);
+    if (dirname(output) === output) throw new Error('Choose an output directory below the filesystem root.');
+    const stage = await mkdtemp(join(tmpdir(), 'tauri-bundle-'));
+    const collected = join(stage, basename(output));
+    try {
+      await mkdir(collected);
+      const outcomes: PhaseOutcome[] = [];
+      const targeting = (args: string[]): string[] => { forwardBridge(args, opts); return args; };
+      const project = (args: string[]): string[] => {
+        if (opts.config) args.push('--config', opts.config);
+        if (opts.identifier) args.push('--identifier', opts.identifier);
+        return args;
+      };
+      outcomes.push(await runCapturingStdout(targeting(project(['logs', '--json'])), join(collected, 'logs.ndjson')));
+      outcomes.push(await runCapturingStdout(targeting(['process-tree', '--deep', '--json']), join(collected, 'process-tree.json')));
+      outcomes.push(await runCapturingStdout(project(['app-paths', '--platform', 'all', '--exists', '--json']), join(collected, 'app-paths.json')));
+      const forensicArgs = project(['forensics', '-o', join(collected, 'forensics')]);
+      if (opts.since) forensicArgs.push('--since', opts.since);
+      outcomes.push(await runToDir('forensics', forensicArgs));
+      if (opts.withCapture) {
+        outcomes.push(await runToDir('capture', targeting(['capture', '-o', join(collected, 'capture'), '--json'])));
       }
-    }
 
-    if (opts.json) {
-      console.log(JSON.stringify({ ...summary, archive: archivePath }, null, 2));
-    } else {
-      console.log(`✓ Incident bundle written to ${outDir}`);
-      console.log(`  ${summary.ok}/${summary.total} phases succeeded`);
-      if (archivePath) console.log(`  Archive: ${archivePath}`);
-      console.log(`  Open ${join(outDir, 'summary.md')} first.`);
+      const redacted = await redactDir(collected, { verify: true, relativeTo: collected });
+      const warnings = redacted.warnings.map(issue => ({ ...issue, path: relative(collected, issue.path) }));
+      if (redacted.failures.length) {
+        const details = redacted.failures.map(issue => `${relative(collected, issue.path)} (${issue.reason})`).join(', ');
+        throw new CliError('REDACTION_FAILED', `Bundle was not published: ${details}`, 'Resolve the listed redaction failures before generating a shareable bundle.');
+      }
+      outcomes.push({ phase: 'redact', ok: true,
+        detail: `redacted ${redacted.redactions} value(s), ${warnings.length} warning(s), 0 failure(s)` });
+      const artifacts = [...await artifactFiles(collected), 'summary.json', 'summary.md'].sort();
+      let archivePath: string | null = opts.archive === false ? null : `${output}.tar.gz`;
+      if (archivePath) outcomes.push({ phase: 'archive', ok: true, detail: `→ ${archivePath}` });
+
+      const writeSummary = async () => {
+        const normalized = outcomes.map(o => ({ ...o, detail: o.detail.split(collected).join('.') }));
+        const summary = redactJson({ outDir, createdPhases: normalized,
+          ok: normalized.filter(o => o.ok).length, total: normalized.length,
+          partial: normalized.some(o => !o.ok), warnings, artifacts, archive: archivePath });
+        const json = JSON.stringify(summary, null, 2);
+        const markdown = redactText(renderSummary(outDir, normalized) +
+          (warnings.length ? '\n## Warnings\n\n' + warnings.map(w => `- ${w.path}: ${w.reason}`).join('\n') + '\n' : ''));
+        if (scanResidualSecrets(json, 'summary.json').length || scanResidualSecrets(markdown, 'summary.md').length) {
+          throw new CliError('REDACTION_FAILED', 'Bundle summary contains a possible credential', 'Remove credentials from output paths and retry.');
+        }
+        await writeFile(join(collected, 'summary.json'), json);
+        await writeFile(join(collected, 'summary.md'), markdown);
+        return summary;
+      };
+      let summary = await writeSummary();
+      const stagedArchive = join(stage, 'archive.tar.gz');
+      if (archivePath) {
+        try {
+          const metadataFlags = process.platform === 'darwin' ? ['--no-mac-metadata'] : [];
+          await exec('tar', [...metadataFlags, '-czf', stagedArchive, '-C', stage, '--', basename(collected)]);
+        } catch (error) {
+          archivePath = null;
+          outcomes[outcomes.length - 1] = { phase: 'archive', ok: false, detail: error instanceof Error ? error.message : String(error) };
+          summary = await writeSummary();
+        }
+      }
+      await publishArtifacts(collected, output);
+      if (archivePath) {
+        try { await publishFile(stagedArchive, archivePath); }
+        catch (error) {
+          archivePath = null;
+          outcomes[outcomes.length - 1] = { phase: 'archive', ok: false, detail: error instanceof Error ? error.message : String(error) };
+          summary = await writeSummary();
+          await publishFile(join(collected, 'summary.json'), join(output, 'summary.json'));
+          await publishFile(join(collected, 'summary.md'), join(output, 'summary.md'));
+        }
+      }
+      if (opts.json) console.log(JSON.stringify(summary, null, 2));
+      else {
+        console.log(`Incident bundle written to ${outDir}`);
+        console.log(`  ${outcomes.filter(o => o.ok).length}/${outcomes.length} phases succeeded`);
+        if (archivePath) console.log(`  Archive: ${archivePath}`);
+        for (const warning of warnings) console.log(`  Warning: ${warning.path} (${warning.reason})`);
+        console.log(`  Open ${join(outDir, 'summary.md')} first.`);
+      }
+    } finally {
+      await rm(stage, { recursive: true, force: true });
     }
   });
 
@@ -141,18 +141,6 @@ function forwardBridge(args: string[], opts: BridgeOpts): void {
 
 function timestampSlug(): string {
   return new Date().toISOString().replace(/[:.]/g, '-');
-}
-
-function dirnameOf(p: string): string {
-  const norm = p.replace(/\/+$/, '');
-  const idx = norm.lastIndexOf('/');
-  return idx <= 0 ? '.' : norm.slice(0, idx);
-}
-
-function basenameOf(p: string): string {
-  const norm = p.replace(/\/+$/, '');
-  const idx = norm.lastIndexOf('/');
-  return idx < 0 ? norm : norm.slice(idx + 1);
 }
 
 /** Spawn this same CLI binary, capturing stdout into `outFile`. */
@@ -176,8 +164,9 @@ function runCapturingStdout(args: string[], outFile: string): Promise<PhaseOutco
     child.on('close', async (code) => {
       try {
         await writeFile(outFile, stdout);
-      } catch {
-        /* ignore write failure */
+      } catch (error) {
+        resolve({ phase: args[0] ?? 'phase', ok: false, detail: `Could not write artifact: ${String(error)}` });
+        return;
       }
       resolve({
         phase: args[0] ?? 'phase',
@@ -201,13 +190,21 @@ function runToDir(phase: string, args: string[]): Promise<PhaseOutcome> {
     child.stderr.setEncoding('utf-8');
     child.stderr.on('data', (c: string) => (stderr += c));
     child.on('error', (err) => resolve({ phase, ok: false, detail: err.message }));
-    child.on('close', (code) =>
-      resolve({
-        phase,
-        ok: code === 0,
-        detail: code === 0 ? 'ok' : `exit ${code}${stderr ? ': ' + stderr.trim().slice(0, 200) : ''}`,
-      }),
-    );
+    child.on('close', async (code) => {
+      let detail = code === 0 ? 'ok' : `exit ${code}${stderr ? ': ' + stderr.trim().slice(0, 200) : ''}`;
+      let ok = code === 0;
+      if (ok) {
+        try {
+          const dir = args[args.indexOf('-o') + 1]!;
+          const file = phase === 'capture' ? 'manifest.json' : 'summary.json';
+          const manifest = JSON.parse(await readFile(join(dir, file), 'utf8')) as { errorCount?: number; partial?: boolean; phases?: PhaseOutcome[] };
+          const failed = manifest.errorCount ?? manifest.phases?.filter(p => !p.ok).length ?? 0;
+          if (failed) { ok = false; detail = `${failed} artifact/collection phase(s) failed; see ${phase}/${file}`; }
+          else if (manifest.partial) { ok = false; detail = `Partial capture; see ${phase}/${file} for warnings`; }
+        } catch (error) { ok = false; detail = `Could not read ${phase} manifest: ${String(error)}`; }
+      }
+      resolve({ phase, ok, detail });
+    });
   });
 }
 

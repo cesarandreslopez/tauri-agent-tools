@@ -1,55 +1,10 @@
 import { Command } from 'commander';
+import { consoleObserver, readObserver, closeObserver } from '../bridge/observers.js';
+import { monitorFor } from '../util/monitor.js';
 import { z } from 'zod';
-import { addBridgeOptions, resolveBridge, parseEnum, parseIntArg } from './shared.js';
-import type { BridgeClient } from '../bridge/client.js';
+import { addBridgeOptions, resolveBridge, parseEnum, parsePositiveInt } from './shared.js';
 import { ConsoleEntrySchema, ConsoleLevelSchema } from '../schemas/commands.js';
 import type { ConsoleEntry } from '../schemas/commands.js';
-
-const PATCH_SCRIPT = `(() => {
-  if (window.__tauriDevToolsConsolePatched) return 'already_patched';
-  window.__tauriDevToolsOriginalConsole = {
-    log: console.log,
-    warn: console.warn,
-    error: console.error,
-    info: console.info,
-    debug: console.debug
-  };
-  window.__tauriDevToolsConsoleLogs = [];
-  ['log', 'warn', 'error', 'info', 'debug'].forEach(function(level) {
-    console[level] = function() {
-      var args = Array.prototype.slice.call(arguments);
-      var message = args.map(function(a) {
-        return typeof a === 'object' ? JSON.stringify(a) : String(a);
-      }).join(' ');
-      window.__tauriDevToolsConsoleLogs.push({
-        level: level,
-        message: message,
-        timestamp: Date.now()
-      });
-      window.__tauriDevToolsOriginalConsole[level].apply(console, arguments);
-    };
-  });
-  window.__tauriDevToolsConsolePatched = true;
-  return 'patched';
-})()`;
-
-const DRAIN_SCRIPT = `(() => {
-  var log = window.__tauriDevToolsConsoleLogs || [];
-  window.__tauriDevToolsConsoleLogs = [];
-  return JSON.stringify(log);
-})()`;
-
-const CLEANUP_SCRIPT = `(() => {
-  if (window.__tauriDevToolsOriginalConsole) {
-    ['log', 'warn', 'error', 'info', 'debug'].forEach(function(level) {
-      console[level] = window.__tauriDevToolsOriginalConsole[level];
-    });
-    delete window.__tauriDevToolsOriginalConsole;
-    delete window.__tauriDevToolsConsoleLogs;
-    delete window.__tauriDevToolsConsolePatched;
-  }
-  return 'cleaned';
-})()`;
 
 function matchesLevel(entry: ConsoleEntry, level?: string): boolean {
   if (!level) return true;
@@ -69,21 +24,13 @@ function formatConsoleEntry(entry: ConsoleEntry): string {
   return `[${time}] [${entry.level.toUpperCase()}] ${entry.message}`;
 }
 
-async function cleanup(bridge: BridgeClient): Promise<void> {
-  try {
-    await bridge.eval(CLEANUP_SCRIPT);
-  } catch {
-    // Best-effort cleanup
-  }
-}
-
 export function registerConsoleMonitor(program: Command): void {
   const cmd = new Command('console-monitor')
     .description('Monitor console output (log/warn/error/info/debug) in real-time')
     .option('--level <level>', 'Filter by level (log, warn, error, info, debug)')
     .option('--filter <regex>', 'Filter messages by regex pattern')
-    .option('--interval <ms>', 'Poll interval in milliseconds', parseIntArg, 500)
-    .option('--duration <ms>', 'Auto-stop after N milliseconds', parseIntArg)
+    .option('--interval <ms>', 'Poll interval in milliseconds', parsePositiveInt, 500)
+    .option('--duration <ms>', 'Auto-stop after N milliseconds', parsePositiveInt)
     .option('--json', 'Output one JSON object per line');
 
   addBridgeOptions(cmd);
@@ -104,38 +51,17 @@ export function registerConsoleMonitor(program: Command): void {
     const filterRegex = opts.filter ? compileRegex(opts.filter, 'filter') : undefined;
 
     const bridge = await resolveBridge(opts);
-
-    const patchResult = await bridge.eval(PATCH_SCRIPT);
-    if (patchResult === 'already_patched') {
-      // Already patched, continue monitoring
-    }
-
-    let stopped = false;
-
-    const onSignal = () => {
-      stopped = true;
-    };
-    process.on('SIGINT', onSignal);
-    process.on('SIGTERM', onSignal);
-
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    if (opts.duration) {
-      timer = setTimeout(() => {
-        stopped = true;
-      }, opts.duration);
-    }
-
-    if (!opts.json) {
-      console.error('Monitoring console output... (Ctrl+C to stop)');
-    }
-
+    const scripts = consoleObserver();
     try {
-      while (!stopped) {
-        await new Promise((resolve) => setTimeout(resolve, opts.interval));
-        if (stopped) break;
+      const patchResult = await bridge.eval(scripts.patch);
+      if (patchResult !== 'patched' && patchResult !== 'already_patched') throw new Error(`Observer setup failed: ${String(patchResult)}`);
 
-        const raw = await bridge.eval(DRAIN_SCRIPT);
-        const entries = z.array(ConsoleEntrySchema).parse(JSON.parse(String(raw)));
+      if (!opts.json) {
+        console.error('Monitoring console output... (Ctrl+C to stop)');
+      }
+
+      await monitorFor(opts, async () => {
+        const entries = z.array(ConsoleEntrySchema).parse(await readObserver(bridge, scripts));
 
         for (const entry of entries) {
           if (!matchesLevel(entry, opts.level)) continue;
@@ -147,12 +73,9 @@ export function registerConsoleMonitor(program: Command): void {
             console.log(formatConsoleEntry(entry));
           }
         }
-      }
+      });
     } finally {
-      if (timer) clearTimeout(timer);
-      process.off('SIGINT', onSignal);
-      process.off('SIGTERM', onSignal);
-      await cleanup(bridge);
+      await closeObserver(bridge, scripts);
     }
   });
 

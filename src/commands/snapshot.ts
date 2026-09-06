@@ -1,8 +1,8 @@
 import { writeFile } from 'node:fs/promises';
 import { Command } from 'commander';
-import type { PlatformAdapter } from '../types.js';
+import type { AdapterFactory } from '../types.js';
 import type { ImageFormat } from '../schemas/commands.js';
-import { addBridgeOptions, resolveBridge, resolveWindowId, parseIntArg } from './shared.js';
+import { addBridgeOptions, resolveBridge, resolveWindowId, parseNonNegativeInt } from './shared.js';
 import { buildSerializerScript } from './dom.js';
 import { computeCropRect, cropImage } from '../util/image.js';
 import { DomNodeSchema } from '../schemas/dom.js';
@@ -27,15 +27,15 @@ const STORAGE_SCRIPT = `(() => {
 
 export function registerSnapshot(
   program: Command,
-  getAdapter: () => PlatformAdapter | Promise<PlatformAdapter>,
+  getAdapter: AdapterFactory,
 ): void {
   const cmd = new Command('snapshot')
     .description('Capture screenshot + DOM + page state + storage in one shot')
     .requiredOption('-o, --output <prefix>', 'Output path prefix (e.g. /tmp/debug)')
     .option('-s, --selector <css>', 'CSS selector to screenshot (full window if omitted)')
-    .option('-t, --title <regex>', 'Window title to match — regex; quote titles with spaces (default: auto-discover)')
+    .option('-t, --title <pattern>', 'Window title (X11: regex; macOS/Wayland: substring); quote titles with spaces (default: auto-discover)')
     .option('-w, --window-id <id>', 'Platform window id (from list-windows) — overrides --title')
-    .option('--dom-depth <number>', 'DOM tree depth', parseIntArg, 3)
+    .option('--dom-depth <number>', 'DOM tree depth', parseNonNegativeInt, 3)
     .option('--eval <js>', 'Additional JS to eval and save')
     .option('--json', 'Output structured manifest');
 
@@ -53,7 +53,7 @@ export function registerSnapshot(
     token?: string;
   }) => {
     const bridge = await resolveBridge(opts);
-    const adapter = await getAdapter();
+    const adapter = await getAdapter(opts.selector ? 'image' : 'capture');
     const prefix = opts.output;
     const format: ImageFormat = 'png';
     const files: Record<string, string> = {};

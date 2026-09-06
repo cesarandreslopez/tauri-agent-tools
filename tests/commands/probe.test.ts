@@ -278,6 +278,22 @@ describe('BridgeClient.version()', () => {
 // ── Probe command integration tests ───────────────────────────────────────────
 
 describe('probe command', () => {
+  it('reports the selected bridge and warns about ambiguous automatic discovery', async () => {
+    const { discoverBridgesByPid } = await import('../../src/bridge/tokenDiscovery.js');
+    vi.mocked(discoverBridgesByPid).mockResolvedValueOnce(new Map([
+      [12345, { port: 9999, token: 'test-token' }], [54321, { port: 8888, token: 'second-token' }],
+    ]));
+    vi.stubGlobal('fetch', vi.fn(async url => new Response(JSON.stringify(
+      String(url).endsWith('/eval') ? { result: 'ready' } : {},
+    ))));
+    const output = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const warning = vi.spyOn(console, 'error').mockImplementation(() => {});
+    await createProgram().parseAsync(['node', 'fixture', 'probe', '--window-label', 'settings', '--json']);
+    const result = JSON.parse(String(output.mock.calls[0][0]));
+    expect(result.target).toMatchObject({ pid: 12345, port: 9999, windowLabel: 'settings', alive: true });
+    expect(result.target.note).toContain('--pid');
+    expect(warning).toHaveBeenCalledWith(expect.stringContaining('--pid'));
+  });
   function createProgram() {
     const program = new Command();
     program.exitOverride();

@@ -4,6 +4,7 @@ import type { BridgeConfig } from '../schemas/bridge.js';
 import type { PlatformAdapter } from '../types.js';
 import { BridgeClient } from '../bridge/client.js';
 import { discoverBridge, discoverBridgesByPid } from '../bridge/tokenDiscovery.js';
+import { CliError } from '../util/errors.js';
 
 /**
  * Options parsed from the bridge-related CLI flags.
@@ -31,7 +32,7 @@ export interface WindowTargetOpts {
 
 /**
  * Resolve the platform window id for a window-consuming command.
- * Precedence: --window-id (used verbatim) > --title regex > bridge document.title.
+ * Precedence: --window-id (used verbatim) > --title pattern > bridge document.title.
  *
  * The id is not validated here: its format is adapter-specific (X11/macOS/Sway
  * numeric, Hyprland hex 0x…), and the adapters that interpolate ids into shell
@@ -73,14 +74,44 @@ export function parseEnum<T extends [string, ...string[]]>(
  * default becomes the radix — `--depth 12` with default 3 parsed as 5.
  */
 export function parseIntArg(value: string): number {
-  return parseInt(value, 10);
+  const n = Number(value);
+  if (!/^[+-]?\d+$/.test(value) || !Number.isSafeInteger(n)) {
+    throw new CliError('INVALID_ARGUMENT', `Expected an integer, got: ${value}`, 'Use a whole number without units or trailing text.');
+  }
+  return n;
+}
+
+export function parseNonNegativeInt(value: string): number {
+  const n = parseIntArg(value);
+  if (n < 0) throw new CliError('INVALID_ARGUMENT', `Expected a non-negative integer, got: ${value}`, 'Use zero or a positive whole number.');
+  return n;
+}
+
+export function parsePositiveInt(value: string): number {
+  const n = parseIntArg(value);
+  if (n <= 0 || n > 2_147_483_647) throw new CliError('INVALID_ARGUMENT', `Expected a positive integer up to 2147483647, got: ${value}`, 'Use a positive whole number.');
+  return n;
+}
+
+function parsePort(value: string): number {
+  const n = parsePositiveInt(value);
+  if (n > 65535) throw new CliError('INVALID_ARGUMENT', `Invalid port: ${value}`, 'Use a port from 1 to 65535.');
+  return n;
+}
+
+export function parsePercent(value: string): number {
+  const n = Number(value);
+  if (value.trim() === '' || !Number.isFinite(n) || n < 0 || n > 100) {
+    throw new CliError('INVALID_ARGUMENT', `Invalid percentage: ${value}`, 'Use a number from 0 to 100.');
+  }
+  return n;
 }
 
 export function addBridgeOptions(cmd: Command): Command {
   return cmd
-    .option('--port <number>', 'Bridge port (auto-discover if omitted)', parseIntArg)
+    .option('--port <number>', 'Bridge port (auto-discover if omitted)', parsePort)
     .option('--token <string>', 'Bridge token (auto-discover if omitted)')
-    .option('--pid <number>', 'Target app PID (auto-discover if omitted)', parseIntArg)
+    .option('--pid <number>', 'Target app PID (auto-discover if omitted)', parsePositiveInt)
     .option('--window-label <label>', 'Target window label (default: main)')
     .option(
       '--strict',

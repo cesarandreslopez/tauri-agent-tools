@@ -1,63 +1,15 @@
 import { Command } from 'commander';
+import { ipcObserver, readObserver, closeObserver } from '../bridge/observers.js';
+import { monitorFor } from '../util/monitor.js';
 import { z } from 'zod';
-import { addBridgeOptions, resolveBridge, parseIntArg } from './shared.js';
-import type { BridgeClient } from '../bridge/client.js';
+import { addBridgeOptions, resolveBridge, parsePositiveInt } from './shared.js';
 import { IpcEntrySchema } from '../schemas/commands.js';
 import type { IpcEntry } from '../schemas/commands.js';
 
-export const PATCH_SCRIPT = `(() => {
-  if (window.__tauriDevToolsPatched) return 'already_patched';
-  function getInvokeTarget() {
-    if (window.__TAURI_INTERNALS__ && typeof window.__TAURI_INTERNALS__.invoke === 'function') {
-      return { owner: window.__TAURI_INTERNALS__, invoke: window.__TAURI_INTERNALS__.invoke };
-    }
-    if (window.__TAURI__ && window.__TAURI__.core && typeof window.__TAURI__.core.invoke === 'function') {
-      return { owner: window.__TAURI__.core, invoke: window.__TAURI__.core.invoke };
-    }
-    return null;
-  }
-  var target = getInvokeTarget();
-  if (!target) {
-    return 'no_tauri';
-  }
-  window.__tauriDevToolsOriginalInvoke = target.invoke;
-  window.__tauriDevToolsInvokeOwner = target.owner;
-  window.__tauriDevToolsIpcLog = [];
-  target.owner.invoke = function(cmd, args, options) {
-    var entry = { command: cmd, args: args || {}, timestamp: Date.now() };
-    var start = performance.now();
-    return window.__tauriDevToolsOriginalInvoke.call(this, cmd, args, options).then(function(result) {
-      entry.duration = Math.round(performance.now() - start);
-      entry.result = result;
-      window.__tauriDevToolsIpcLog.push(entry);
-      return result;
-    }).catch(function(err) {
-      entry.duration = Math.round(performance.now() - start);
-      entry.error = err && err.message ? err.message : String(err);
-      window.__tauriDevToolsIpcLog.push(entry);
-      throw err;
-    });
-  };
-  window.__tauriDevToolsPatched = true;
-  return 'patched';
-})()`;
-
-export const DRAIN_SCRIPT = `(() => {
-  var log = window.__tauriDevToolsIpcLog || [];
-  window.__tauriDevToolsIpcLog = [];
-  return JSON.stringify(log);
-})()`;
-
-export const CLEANUP_SCRIPT = `(() => {
-  if (window.__tauriDevToolsOriginalInvoke && window.__tauriDevToolsInvokeOwner) {
-    window.__tauriDevToolsInvokeOwner.invoke = window.__tauriDevToolsOriginalInvoke;
-    delete window.__tauriDevToolsOriginalInvoke;
-    delete window.__tauriDevToolsInvokeOwner;
-    delete window.__tauriDevToolsIpcLog;
-    delete window.__tauriDevToolsPatched;
-  }
-  return 'cleaned';
-})()`;
+const legacyScripts = ipcObserver('legacy');
+export const PATCH_SCRIPT = legacyScripts.patch;
+export const DRAIN_SCRIPT = legacyScripts.drain;
+export const CLEANUP_SCRIPT = legacyScripts.cleanup;
 
 function escapeRegExp(s: string): string {
   return s.replace(/[.+?^${}()|[\]\\]/g, '\\$&');
@@ -98,21 +50,13 @@ function renderStats(stats: Map<string, CommandStat>): void {
   }
 }
 
-async function cleanup(bridge: BridgeClient): Promise<void> {
-  try {
-    await bridge.eval(CLEANUP_SCRIPT);
-  } catch {
-    // Best-effort cleanup
-  }
-}
-
 export function registerIpcMonitor(program: Command): void {
   const cmd = new Command('ipc-monitor')
-    .description('Monitor Tauri IPC calls in real-time (read-only)')
+    .description('Monitor Tauri IPC calls using temporary instrumentation')
     .option('--filter <command>', 'Only show specific IPC commands (supports * wildcards)')
-    .option('--interval <ms>', 'Poll interval in milliseconds', parseIntArg, 500)
-    .option('--duration <ms>', 'Auto-stop after N milliseconds', parseIntArg)
-    .option('--slow <ms>', 'Flag IPC calls that completed but took ≥ N ms', parseIntArg)
+    .option('--interval <ms>', 'Poll interval in milliseconds', parsePositiveInt, 500)
+    .option('--duration <ms>', 'Auto-stop after N milliseconds', parsePositiveInt)
+    .option('--slow <ms>', 'Flag IPC calls that completed but took ≥ N ms', parsePositiveInt)
     .option('--stats', 'Print a per-command latency summary on exit')
     .option('--json', 'Output one JSON object per line');
 
@@ -132,41 +76,18 @@ export function registerIpcMonitor(program: Command): void {
     const stats = new Map<string, CommandStat>();
 
     const bridge = await resolveBridge(opts);
-
-    // Inject the monkey-patch
-    const patchResult = await bridge.eval(PATCH_SCRIPT);
-    if (patchResult === 'no_tauri') {
-      throw new Error(
-        'Tauri invoke API not found. Expected window.__TAURI_INTERNALS__.invoke or window.__TAURI__.core.invoke.',
-      );
-    }
-
-    let stopped = false;
-
-    const onSignal = () => {
-      stopped = true;
-    };
-    process.on('SIGINT', onSignal);
-    process.on('SIGTERM', onSignal);
-
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    if (opts.duration) {
-      timer = setTimeout(() => {
-        stopped = true;
-      }, opts.duration);
-    }
-
-    if (!opts.json) {
-      console.error('Monitoring IPC calls... (Ctrl+C to stop)');
-    }
-
+    const scripts = ipcObserver();
     try {
-      while (!stopped) {
-        await new Promise((resolve) => setTimeout(resolve, opts.interval));
-        if (stopped) break;
+      const patchResult = await bridge.eval(scripts.patch);
+      if (patchResult === 'no_tauri') throw new Error('Tauri invoke API not found. Expected window.__TAURI_INTERNALS__.invoke or window.__TAURI__.core.invoke.');
+      if (patchResult !== 'patched' && patchResult !== 'already_patched') throw new Error(`Observer setup failed: ${String(patchResult)}`);
 
-        const raw = await bridge.eval(DRAIN_SCRIPT);
-        const entries = z.array(IpcEntrySchema).parse(JSON.parse(String(raw)));
+      if (!opts.json) {
+        console.error('Monitoring IPC calls... (Ctrl+C to stop)');
+      }
+
+      await monitorFor(opts, async () => {
+        const entries = z.array(IpcEntrySchema).parse(await readObserver(bridge, scripts));
 
         for (const entry of entries) {
           if (opts.filter) {
@@ -199,12 +120,9 @@ export function registerIpcMonitor(program: Command): void {
             console.log(formatEntry(entry, isSlow));
           }
         }
-      }
+      });
     } finally {
-      if (timer) clearTimeout(timer);
-      process.off('SIGINT', onSignal);
-      process.off('SIGTERM', onSignal);
-      await cleanup(bridge);
+      await closeObserver(bridge, scripts);
       if (opts.stats) renderStats(stats);
     }
   });

@@ -52,20 +52,8 @@ describe('Wait command', () => {
       const { program, mockAdapter } = createProgram();
       mockAdapter.findWindow.mockRejectedValue(new Error('not found'));
 
-      // Mock Date.now to simulate immediate timeout
-      const realDateNow = Date.now;
-      let callCount = 0;
-      vi.spyOn(Date, 'now').mockImplementation(() => {
-        callCount++;
-        // First call: sets deadline. Second+ calls: past deadline.
-        return callCount === 1 ? 1000 : 1000 + 20000;
-      });
-
-      await expect(
-        program.parseAsync([
-          'node', 'test', 'wait', '--title', 'Missing',
-        ]),
-      ).rejects.toThrow('Timed out waiting for window: Missing');
+      await expect(program.parseAsync(['node','test','wait','--title','Missing','--timeout','20','--interval','5']))
+        .rejects.toThrow('Timed out waiting for window: Missing');
 
       vi.restoreAllMocks();
     });

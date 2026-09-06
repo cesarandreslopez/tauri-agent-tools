@@ -48,7 +48,7 @@ describe('IPC Monitor', () => {
       await expect(windowObj.__TAURI_INTERNALS__.invoke('get_data', { id: 1 })).resolves.toBe('ok');
 
       expect(originalInvoke).toHaveBeenCalledWith('get_data', { id: 1 }, undefined);
-      const entries = JSON.parse(runBrowserScript<string>(DRAIN_SCRIPT, windowObj));
+      const { entries } = JSON.parse(runBrowserScript<string>(DRAIN_SCRIPT, windowObj));
       expect(entries).toHaveLength(1);
       expect(entries[0].command).toBe('get_data');
       expect(entries[0].result).toBe('ok');

@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+import { parsePositiveInt } from './shared.js';
 import { spawn } from 'node:child_process';
 import { mkdir, readdir, stat, writeFile, readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
@@ -395,12 +396,4 @@ function suggestNextSteps(
     tips.push(`- No specific anomalies detected. Inspect the artifacts in this folder for context.`);
   }
   return tips.join('\n');
-}
-
-function parsePositiveInt(value: string): number {
-  const n = parseInt(value, 10);
-  if (!Number.isFinite(n) || n <= 0) {
-    throw new Error(`Expected a positive integer, got: ${value}`);
-  }
-  return n;
 }

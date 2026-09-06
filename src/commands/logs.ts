@@ -1,7 +1,7 @@
 import { Command } from 'commander';
 import { readFile, readdir } from 'node:fs/promises';
 import { basename, join, resolve } from 'node:path';
-import { addBridgeOptions, tryResolveBridgeConfig, parseIntArg } from './shared.js';
+import { addBridgeOptions, tryResolveBridgeConfig, parsePositiveInt } from './shared.js';
 import type { BridgeOpts } from './shared.js';
 import { BridgeClient } from '../bridge/client.js';
 import { resolveTauriProject, resolveTauriPaths, currentPlatform } from '../util/tauriConfig.js';
@@ -14,10 +14,9 @@ import {
   type MergedLogEntry,
 } from '../util/logMerge.js';
 import type { OsLogLevel } from '../schemas/osLog.js';
-import type { RustLogEntry } from '../schemas/bridge.js';
-
-export const LOG_CURSOR_UNAVAILABLE_NOTE =
-  'bridge <0.8 has no log cursor; using drain polling (entries may be lost between polls)';
+import { readRustLogs, newLogCursor, type LogCursor } from '../bridge/logReader.js';
+export { LOG_CURSOR_UNAVAILABLE_NOTE } from '../bridge/logReader.js';
+import { CliError } from '../util/errors.js';
 
 interface LogsOpts extends BridgeOpts {
   config?: string;
@@ -39,26 +38,7 @@ interface LogsOpts extends BridgeOpts {
   pretty?: boolean;
 }
 
-export interface LogsFollowState {
-  cursor: number;
-  drainFallback: boolean;
-  warnedDrainFallback: boolean;
-}
-
-interface FollowBridgeClient {
-  fetchLogs(
-    arg?:
-      | number
-      | { cursor?: number; waitMs?: number; limit?: number; timeoutMs?: number },
-  ): Promise<RustLogEntry[] | { entries: RustLogEntry[]; cursor?: number; dropped?: number }>;
-}
-
-interface ReadFollowBridgeBatchOptions {
-  waitMs?: number;
-  limit?: number;
-  intervalMs?: number;
-  warn?: (message: string) => void;
-}
+export type LogsFollowState = LogCursor;
 
 function collect(value: string, prev: string[]): string[] {
   return [...prev, value];
@@ -80,7 +60,7 @@ export function registerLogs(program: Command): void {
     .option('--filter <regex>', 'Filter messages by regex')
     .option('--correlate', 'Infer correlation ids (run_id, requestId, …) into a correlation field')
     .option('--follow', 'Follow live bridge logs until interrupted')
-    .option('--interval <ms>', 'Drain fallback polling interval for --follow', parseIntArg, 2000)
+    .option('--interval <ms>', 'Drain fallback polling interval for --follow', parsePositiveInt, 2000)
     .option('--raw', 'Include the raw source payload/line in NDJSON output')
     .option('--json', 'Emit NDJSON, one object per line (this is the default; accepted for consistency)')
     .option('--pretty', 'Human-readable output (overrides --json)');
@@ -93,6 +73,7 @@ export function registerLogs(program: Command): void {
     const filterRe = opts.filter ? compileRegex(opts.filter, 'filter') : null;
 
     if (opts.follow) {
+      if (opts.bridge === false) throw new CliError('INVALID_ARGUMENT', '--follow requires the bridge; --no-bridge cannot be combined with it', 'Use logs --no-bridge for an on-disk snapshot.');
       await followBridgeLogs(opts, minLevel, sourceRe, filterRe);
       return;
     }
@@ -117,7 +98,7 @@ export function registerLogs(program: Command): void {
       } else {
         try {
           const client = new BridgeClient(cfg, opts.windowLabel);
-          const logs = await client.fetchLogs();
+          const logs = await readRustLogs(client);
           bridgeEntries = logs.map(normalizeRustLog);
           notes.push(`bridge: ${bridgeEntries.length} entry(ies) from /logs`);
         } catch (e) {
@@ -147,38 +128,11 @@ export function registerLogs(program: Command): void {
 }
 
 export async function readFollowBridgeBatch(
-  client: FollowBridgeClient,
+  client: Parameters<typeof readRustLogs>[0],
   state: LogsFollowState,
-  options: ReadFollowBridgeBatchOptions = {},
+  options: NonNullable<Parameters<typeof readRustLogs>[2]> = {},
 ): Promise<MergedLogEntry[]> {
-  const warn = options.warn ?? console.error;
-  if (state.drainFallback) {
-    // The poll cadence may be sub-second; don't let it shrink the HTTP timeout.
-    const entries = await client.fetchLogs(Math.max(options.intervalMs ?? 2000, 2000));
-    return asEntries(entries).map(normalizeRustLog);
-  }
-
-  const response = await client.fetchLogs({
-    cursor: state.cursor,
-    waitMs: options.waitMs ?? 10_000,
-    limit: options.limit ?? 1000,
-    timeoutMs: (options.waitMs ?? 10_000) + 1000,
-  });
-  const envelope = asEnvelope(response);
-  if (envelope.cursor === undefined) {
-    state.drainFallback = true;
-    if (!state.warnedDrainFallback) {
-      state.warnedDrainFallback = true;
-      warn(`note: ${LOG_CURSOR_UNAVAILABLE_NOTE}`);
-    }
-    return envelope.entries.map(normalizeRustLog);
-  }
-
-  state.cursor = envelope.cursor;
-  if ((envelope.dropped ?? 0) > 0) {
-    warn(`warning: bridge log cursor dropped ${envelope.dropped} evicted entrie(s)`);
-  }
-  return envelope.entries.map(normalizeRustLog);
+  return (await readRustLogs(client, state, { waitMs: 10_000, ...options })).map(normalizeRustLog);
 }
 
 async function followBridgeLogs(
@@ -194,16 +148,13 @@ async function followBridgeLogs(
     );
   }
   const client = new BridgeClient(cfg, opts.windowLabel);
-  const state: LogsFollowState = {
-    cursor: 0,
-    drainFallback: false,
-    warnedDrainFallback: false,
-  };
+  const state = newLogCursor();
   let stopped = false;
   const stop = (): void => {
     stopped = true;
   };
   process.once('SIGINT', stop);
+  process.once('SIGTERM', stop);
   try {
     while (!stopped) {
       const batch = await readFollowBridgeBatch(client, state, {
@@ -215,6 +166,7 @@ async function followBridgeLogs(
     }
   } finally {
     process.off('SIGINT', stop);
+    process.off('SIGTERM', stop);
   }
 }
 
@@ -256,18 +208,6 @@ function emitRows(entries: MergedLogEntry[], opts: Pick<LogsOpts, 'pretty' | 'ra
       console.log(JSON.stringify(rest));
     }
   }
-}
-
-function asEnvelope(
-  response: RustLogEntry[] | { entries: RustLogEntry[]; cursor?: number; dropped?: number },
-): { entries: RustLogEntry[]; cursor?: number; dropped?: number } {
-  return Array.isArray(response) ? { entries: response } : response;
-}
-
-function asEntries(
-  response: RustLogEntry[] | { entries: RustLogEntry[]; cursor?: number; dropped?: number },
-): RustLogEntry[] {
-  return Array.isArray(response) ? response : response.entries;
 }
 
 function normalizeInterval(value: number): number {

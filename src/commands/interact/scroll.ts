@@ -3,6 +3,7 @@ import { resolveBridge, parseIntArg } from '../shared.js';
 import type { BridgeOpts } from '../shared.js';
 import { addInteractOptions, escapeSelector } from './shared.js';
 import { ScrollResultSchema } from '../../schemas/interact.js';
+import { CliError } from '../../util/errors.js';
 
 export interface ScrollOpts {
   selector?: string;
@@ -106,6 +107,9 @@ Examples:
     toBottom?: boolean;
     intoView?: boolean;
   }) => {
+    const modes = [opts.by !== undefined, opts.to !== undefined, opts.toTop, opts.toBottom, opts.intoView].filter(Boolean);
+    if (modes.length > 1) throw new CliError('INVALID_ARGUMENT', 'Choose only one scroll action', 'Use --by, --to, --to-top, --to-bottom, or --into-view.');
+    if (opts.intoView && !opts.selector) throw new CliError('INVALID_ARGUMENT', '--into-view requires --selector', 'Select the element to scroll into view.');
     const bridge = await resolveBridge(opts);
     const script = buildScrollScript({
       selector: opts.selector,

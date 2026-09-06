@@ -16,7 +16,7 @@ This package includes three [Agent Skills](https://agentskills.io):
 
 **Install:** `npm install -g tauri-agent-tools`
 
-**Inspection commands are read-only.** Interaction commands (click, type, scroll, etc.) are debug-only — they only work with the dev bridge.
+**DOM, screenshot, and storage inspection read app state.** `eval` can modify app state. Monitors install temporary instrumentation. Interaction commands (click, type, scroll, etc.) are debug-only — they only work with the dev bridge.
 
 **Standalone commands** (no bridge needed):
 `list-windows`, `info`, `screenshot --title`, `wait --title`, `diff`

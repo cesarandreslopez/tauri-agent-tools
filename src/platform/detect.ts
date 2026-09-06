@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import type { DisplayServer } from '../types.js';
+import type { DisplayServer, AdapterOperation } from '../types.js';
 
 export function detectDisplayServer(): DisplayServer {
   if (process.platform === 'darwin') return 'darwin';
@@ -108,8 +108,17 @@ export async function checkMacOSTools(): Promise<ToolCheck[]> {
   return [screencapture, osascript, sips, magick];
 }
 
-export async function ensureTools(displayServer: DisplayServer): Promise<void> {
+export async function ensureTools(displayServer: DisplayServer, operation: AdapterOperation = 'image'): Promise<void> {
   let checks: ToolCheck[];
+  if (operation === 'inspect') {
+    const name = displayServer === 'darwin' ? 'osascript'
+      : displayServer === 'x11' ? 'xdotool'
+      : displayServer === 'wayland-hyprland' ? 'hyprctl' : 'swaymsg';
+    if (!(await commandExists(name))) {
+      throw new Error(`Missing required tool: ${name}. Install the window-inspection tool for your display server.`);
+    }
+    return;
+  }
   if (displayServer === 'darwin') {
     checks = await checkMacOSTools();
   } else if (displayServer === 'wayland-sway') {
@@ -123,7 +132,7 @@ export async function ensureTools(displayServer: DisplayServer): Promise<void> {
     checks = await checkX11Tools();
   }
 
-  const missing = checks.filter((t) => !t.available);
+  const missing = checks.filter(t => !t.available && (operation === 'image' || displayServer === 'x11' || t.name !== 'magick (ImageMagick)'));
   if (missing.length > 0) {
     const hints = missing.map((t) => `  ${t.name}: ${t.installHint}`).join('\n');
     throw new Error(`Missing required tools:\n${hints}`);

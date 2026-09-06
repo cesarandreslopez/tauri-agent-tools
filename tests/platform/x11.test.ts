@@ -2,7 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { X11Adapter } from '../../src/platform/x11.js';
 
 // Mock the exec utility
-vi.mock('../../src/util/exec.js', () => ({
+vi.mock('../../src/util/exec.js', async importOriginal => ({
+  ...await importOriginal(),
   exec: vi.fn(),
   validateWindowId: vi.fn((id: string) => {
     if (!/^\d+$/.test(id)) throw new Error(`Invalid window ID: ${id}`);
@@ -13,7 +14,7 @@ vi.mock('../../src/util/magick.js', () => ({
   magickCommand: vi.fn((sub: string) => Promise.resolve({ bin: sub, args: [] })),
 }));
 
-import { exec } from '../../src/util/exec.js';
+import { exec, ExecError } from '../../src/util/exec.js';
 const mockExec = vi.mocked(exec);
 
 describe('X11Adapter', () => {
@@ -25,6 +26,15 @@ describe('X11Adapter', () => {
   });
 
   describe('findWindow', () => {
+    it('treats xdotool exit 1 without diagnostics as an empty search', async () => {
+      mockExec.mockRejectedValue(new ExecError('no matches', 1, Buffer.alloc(0), ''));
+      await expect(adapter.findWindow('Late')).rejects.toThrow('No window found');
+      await expect(adapter.listWindows()).resolves.toEqual([]);
+    });
+    it('preserves display and command failures', async () => {
+      mockExec.mockRejectedValue(new ExecError('display unavailable', 1, Buffer.alloc(0), 'cannot open display'));
+      await expect(adapter.findWindow('Late')).rejects.toThrow('display unavailable');
+    });
     it('returns the first matching window ID', async () => {
       mockExec.mockResolvedValue({
         stdout: Buffer.from('12345678\n87654321\n'),

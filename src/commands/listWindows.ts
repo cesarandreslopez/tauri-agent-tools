@@ -1,10 +1,10 @@
 import { Command } from 'commander';
-import type { PlatformAdapter, WindowListEntry } from '../types.js';
+import type { AdapterFactory, WindowListEntry } from '../types.js';
 import { discoverBridgesByPid } from '../bridge/tokenDiscovery.js';
 
 export function registerListWindows(
   program: Command,
-  getAdapter: () => Promise<PlatformAdapter>,
+  getAdapter: AdapterFactory,
 ): void {
   const cmd = new Command('list-windows')
     .description('List all visible windows, marking Tauri apps')

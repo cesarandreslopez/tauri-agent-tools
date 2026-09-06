@@ -7,7 +7,7 @@ tags: [tauri, desktop, debugging, screenshot, dom, inspection, diff, mutations, 
 
 # tauri-agent-tools
 
-CLI tool for agent-driven inspection and interaction with Tauri desktop applications. Inspection commands are read-only. Interaction commands (click, type, scroll, etc.) are debug-only — they only work when the app runs with the dev bridge enabled.
+CLI tool for agent-driven inspection and interaction with Tauri desktop applications. DOM, screenshot, and storage inspection read app state; `eval` can modify it. Monitors install temporary instrumentation. Interaction commands (click, type, scroll, etc.) are debug-only — they only work when the app runs with the dev bridge enabled.
 
 ## Prerequisites
 
@@ -29,6 +29,20 @@ npm install -g tauri-agent-tools
 | macOS | `imagemagick` (`brew install imagemagick`), Screen Recording permission |
 
 ## Bridge vs Standalone
+
+Dependency checks follow the operation: window listing/info/title waits do not require ImageMagick; full-window PNG capture on macOS/Wayland uses native tools; crop/resize/diff and X11 capture require ImageMagick.
+
+`--title` uses a regex on X11 and a substring on macOS/Sway/Hyprland. `probe --json` reports the selected PID, port, and window label; use `--pid` when multiple apps are running.
+
+`eval --json` returns `{ "result": value }`. It awaits promises and reports thrown expressions as errors. Commands accepting `--json` send fatal `{ "error": { "code": "…", "message": "…", "hint": "…" } }` responses to stderr and exit nonzero; result records remain on stdout.
+
+Choose exactly one condition for `wait`. Numeric intervals/timeouts must be positive integers. `check` requires an assertion; `--no-errors` fails if observation is incomplete.
+
+Console/IPC/mutation collectors have independent bounded buffers, report drops, and collect a final batch on stop. They restore their own instrumentation on completion, error, SIGINT, and SIGTERM while the webview is reachable. `logs`, `rust-logs`, and `capture` use independent v0.8 cursors; older bridges warn and fall back to destructive drain reads.
+
+`bundle` stages privately and publishes only after text redaction and residual-secret checks pass. Redaction failures prevent the new archive and directory from being published. Its archive excludes unrelated existing files and rejects artifact symlinks. Missing sources produce `partial: true`; captures also save `warnings`. Images remain unredacted: review them before sharing.
+
+Quote the complete replay command, e.g. `--to-exec "node my-sidecar.js"`; it is split on spaces, without shell syntax or support for arguments containing spaces.
 
 Some commands require the Rust dev bridge running inside the Tauri app. Others work standalone.
 
@@ -223,7 +237,7 @@ tauri-agent-tools os-logs --level error --source main --duration 30000
 # Run a sidecar under a tap to see its stdio + validate against a JSON Schema
 tauri-agent-tools sidecar tap --schema ./schema.json --record /tmp/run.ndjson -- node my-sidecar.js
 # Replay deterministically
-tauri-agent-tools sidecar replay /tmp/run.ndjson --to-exec node my-sidecar.js --rate 100
+tauri-agent-tools sidecar replay /tmp/run.ndjson --to-exec "node my-sidecar.js" --rate 100
 
 # One-shot forensic bundle for post-crash analysis. Works on a DEAD app.
 tauri-agent-tools forensics --config ./src-tauri -o ./forensics-out
@@ -337,12 +351,12 @@ tauri-agent-tools eval "document.title" --window-label overlay --json
 
 | Command | Key Flags | Bridge? | Description |
 |---------|-----------|---------|-------------|
-| `screenshot` | `--selector <css>`, `--title <regex>`, `--window-id <id>`, `-o <path>`, `--max-width <n>` | selector: yes, title/window-id: no | Capture window or DOM element screenshot |
+| `screenshot` | `--selector <css>`, `--title <pattern>`, `--window-id <id>`, `-o <path>`, `--max-width <n>` | selector: yes, title/window-id: no | Capture window or DOM element screenshot |
 | `dom` | `[selector]`, `--depth <n>`, `--styles`, `--text <pattern>`, `--mode accessibility`, `--json` | yes | Query DOM structure or find elements by text |
 | `eval` | `<js-expression>`, `--file <path>` | yes | Evaluate JavaScript in webview |
-| `wait` | `--selector <css>`, `--eval <js>`, `--title <regex>`, `--timeout <ms>` | selector/eval: yes | Wait for a condition |
+| `wait` | `--selector <css>`, `--eval <js>`, `--title <pattern>`, `--timeout <ms>` | selector/eval: yes | Wait for a condition |
 | `list-windows` | `--tauri`, `--json` | no | List visible windows |
-| `info` | `--title <regex>`, `--window-id <id>`, `--json` | no | Window geometry and display info |
+| `info` | `--title <pattern>`, `--window-id <id>`, `--json` | no | Window geometry and display info |
 | `ipc-monitor` | `--filter <cmd>`, `--duration <ms>`, `--slow <ms>`, `--stats`, `--json` | yes | Monitor Tauri IPC calls; flag slow calls + per-command latency summary |
 | `console-monitor` | `--level <lvl>`, `--filter <regex>`, `--duration <ms>`, `--json` | yes | Monitor console output |
 | `rust-logs` | `--level <lvl>`, `--target <regex>`, `--source <src>`, `--duration <ms>`, `--json` | yes | Monitor Rust logs and sidecar output |
@@ -386,7 +400,7 @@ All bridge-dependent commands support these flags:
 
 ## Important Notes
 
-- **Inspection commands are read-only.** They don't modify app state.
+- **Evaluation can modify app state.** `eval` runs unrestricted JavaScript. Monitors, `capture`, and `check --no-errors` install temporary instrumentation and clean it up when they stop; force-killing the CLI cannot run cleanup.
 - **Interaction commands are debug-only.** They only work with the dev bridge (debug builds).
 - **Use `--json`** for structured, parseable output in automation.
 - **Always use `--duration`** with `ipc-monitor`, `console-monitor`, `rust-logs`, and `mutations`.

@@ -1,5 +1,7 @@
 import { Command } from 'commander';
-import { addBridgeOptions, resolveBridge, parseEnum, parseIntArg } from './shared.js';
+import { readRustLogs, newLogCursor } from '../bridge/logReader.js';
+import { monitorFor } from '../util/monitor.js';
+import { addBridgeOptions, resolveBridge, parseEnum, parsePositiveInt } from './shared.js';
 import { RustLogLevelSchema } from '../schemas/bridge.js';
 import type { RustLogEntry } from '../schemas/bridge.js';
 
@@ -43,8 +45,8 @@ export function registerRustLogs(program: Command): void {
     .option('--target <regex>', 'Filter by Rust module path (regex)')
     .option('--source <source>', 'Filter by source: rust, sidecar, all, or sidecar:<name>', 'all')
     .option('--filter <regex>', 'Filter messages by regex pattern')
-    .option('--interval <ms>', 'Poll interval in milliseconds', parseIntArg, 500)
-    .option('--duration <ms>', 'Auto-stop after N milliseconds', parseIntArg)
+    .option('--interval <ms>', 'Poll interval in milliseconds', parsePositiveInt, 500)
+    .option('--duration <ms>', 'Auto-stop after N milliseconds', parsePositiveInt)
     .option('--json', 'Output one JSON object per line');
 
   addBridgeOptions(cmd);
@@ -69,50 +71,28 @@ export function registerRustLogs(program: Command): void {
 
     const bridge = await resolveBridge(opts);
 
-    let stopped = false;
-
-    const onSignal = () => {
-      stopped = true;
-    };
-    process.on('SIGINT', onSignal);
-    process.on('SIGTERM', onSignal);
-
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    if (opts.duration) {
-      timer = setTimeout(() => {
-        stopped = true;
-      }, opts.duration);
-    }
+    const cursor = newLogCursor();
 
     if (!opts.json) {
       console.error('Monitoring Rust logs... (Ctrl+C to stop)');
     }
 
-    try {
-      while (!stopped) {
-        await new Promise((resolve) => setTimeout(resolve, opts.interval));
-        if (stopped) break;
+    await monitorFor(opts, async () => {
+      const entries: RustLogEntry[] = await readRustLogs(bridge, cursor);
 
-        const entries: RustLogEntry[] = await bridge.fetchLogs();
+      for (const entry of entries) {
+        if (!matchesLevel(entry, opts.level)) continue;
+        if (targetRegex && !targetRegex.test(entry.target)) continue;
+        if (!matchesSource(entry, opts.source)) continue;
+        if (filterRegex && !filterRegex.test(entry.message)) continue;
 
-        for (const entry of entries) {
-          if (!matchesLevel(entry, opts.level)) continue;
-          if (targetRegex && !targetRegex.test(entry.target)) continue;
-          if (!matchesSource(entry, opts.source)) continue;
-          if (filterRegex && !filterRegex.test(entry.message)) continue;
-
-          if (opts.json) {
-            console.log(JSON.stringify(entry));
-          } else {
-            console.log(formatLogEntry(entry));
-          }
+        if (opts.json) {
+          console.log(JSON.stringify(entry));
+        } else {
+          console.log(formatLogEntry(entry));
         }
       }
-    } finally {
-      if (timer) clearTimeout(timer);
-      process.off('SIGINT', onSignal);
-      process.off('SIGTERM', onSignal);
-    }
+    });
   });
 
   program.addCommand(cmd);

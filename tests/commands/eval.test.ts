@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Command } from 'commander';
 import { BridgeClient } from '../../src/bridge/client.js';
+import { buildEvaluationScript } from '../../src/bridge/evaluate.js';
 import { registerEval } from '../../src/commands/eval.js';
 
 vi.mock('../../src/bridge/tokenDiscovery.js', () => ({
@@ -164,7 +165,7 @@ describe('Eval --file option', () => {
 
     const mockFetch = vi.fn().mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve({ result: 'My App' }),
+      json: () => Promise.resolve({ result: JSON.stringify({ok:true,value:'My App',truthy:true}) }),
     });
     vi.stubGlobal('fetch', mockFetch);
 
@@ -177,7 +178,7 @@ describe('Eval --file option', () => {
     expect(mockFetch).toHaveBeenCalledWith(
       'http://127.0.0.1:9999/eval',
       expect.objectContaining({
-        body: JSON.stringify({ js: 'document.title', token: 'test-token' }),
+        body: JSON.stringify({ js: buildEvaluationScript('document.title'), token: 'test-token' }),
       }),
     );
     expect(consoleSpy).toHaveBeenCalledWith('My App');
@@ -189,7 +190,7 @@ describe('Eval --file option', () => {
   it('uses expression argument when --file is not provided', async () => {
     const mockFetch = vi.fn().mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve({ result: 'test' }),
+      json: () => Promise.resolve({ result: JSON.stringify({ok:true,value:'test',truthy:true}) }),
     });
     vi.stubGlobal('fetch', mockFetch);
 
@@ -201,7 +202,7 @@ describe('Eval --file option', () => {
     expect(mockFetch).toHaveBeenCalledWith(
       'http://127.0.0.1:9999/eval',
       expect.objectContaining({
-        body: JSON.stringify({ js: 'document.title', token: 'test-token' }),
+        body: JSON.stringify({ js: buildEvaluationScript('document.title'), token: 'test-token' }),
       }),
     );
 
@@ -217,31 +218,13 @@ describe('Eval --file option', () => {
     ).rejects.toThrow('Provide either an <expression> argument or --file <path>');
   });
 
-  it('prefers --file over expression argument when both given', async () => {
-    const { readFile } = await import('node:fs/promises');
-    const mockReadFile = vi.mocked(readFile);
-    mockReadFile.mockResolvedValue('file-content()');
-
-    const mockFetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ result: 'from-file' }),
-    });
-    vi.stubGlobal('fetch', mockFetch);
-
-    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-
-    const program = createProgram();
-    await program.parseAsync(['node', 'test', 'eval', 'arg-expr', '--file', 'script.js', '--port', '9999', '--token', 'test-token']);
-
-    expect(mockReadFile).toHaveBeenCalledWith('script.js', 'utf-8');
-    expect(mockFetch).toHaveBeenCalledWith(
-      'http://127.0.0.1:9999/eval',
-      expect.objectContaining({
-        body: JSON.stringify({ js: 'file-content()', token: 'test-token' }),
-      }),
-    );
-
-    consoleSpy.mockRestore();
+  it('rejects competing sources before reading a file or connecting', async () => {
+    const {readFile} = await import('node:fs/promises');
+    vi.mocked(readFile).mockClear();
+    const mockFetch = vi.fn(); vi.stubGlobal('fetch',mockFetch);
+    await expect(createProgram().parseAsync(['node','test','eval','arg-expr','--file','script.js']))
+      .rejects.toThrow('either an expression or --file');
+    expect(readFile).not.toHaveBeenCalled();expect(mockFetch).not.toHaveBeenCalled();
     vi.unstubAllGlobals();
   });
 });

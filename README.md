@@ -49,6 +49,12 @@ npm install -g tauri-agent-tools
 - **Linux Wayland/Hyprland:** `hyprctl` (included with Hyprland), `grim`, `imagemagick`
 - **macOS:** `imagemagick` (`brew install imagemagick`) — all other tools are built-in. Grant Screen Recording permission in System Settings → Privacy & Security → Screen Recording.
 
+Dependencies are checked for the requested operation. `list-windows`, `info`, and `wait --title` only need the platform's window inspection tool. Full-window PNG capture on macOS and Wayland does not require ImageMagick; cropping, resizing, image comparison, and X11 capture do. Bridge-only commands need no screenshot tools.
+
+`--title` uses a regular expression on X11 and a substring on macOS, Sway, and Hyprland. Quote patterns containing spaces. `--window-id` selects a window directly; `--pid` selects an app bridge, and `--window-label` selects its webview. `probe --json` reports the selected PID, port, and label and notes ambiguous discovery.
+
+Commands that accept `--json` keep results on stdout and report fatal errors on stderr as `{"error":{"code":"…","message":"…","hint":"…"}}`, with a nonzero exit status. Monitors emit NDJSON; progress and warnings go to stderr. Failed `check` assertions and `diff` thresholds retain their structured result on stdout and exit 1.
+
 ## Quick Start
 
 ### 1. Add the bridge to your Tauri app
@@ -92,7 +98,7 @@ Capture a screenshot of a window or DOM element.
 | Option | Description |
 |--------|-------------|
 | `-s, --selector <css>` | CSS selector — screenshot just this element (requires bridge) |
-| `-t, --title <regex>` | Window title to match — regex; quote titles with spaces |
+| `-t, --title <pattern>` | Window title (X11: regex; macOS/Wayland: substring); quote titles with spaces |
 | `-w, --window-id <id>` | Platform window id (from `list-windows`) — overrides `--title` |
 | `-o, --output <path>` | Output file path (default: auto-named) |
 | `--format <png\|jpg>` | Output format (default: png) |
@@ -129,17 +135,20 @@ tauri-agent-tools eval --file script.js
 |--------|-------------|
 | `<js-expression>` | Inline JavaScript to evaluate |
 | `--file <path>` | Load JavaScript from a file instead |
+| `--json` | Output `{ "result": value }`; awaits promises and reports evaluation errors |
 | `--window-label <label>` | Target a specific webview window (default: main) |
 
 ### `wait`
 
 Wait for a condition to be met.
 
+Choose exactly one of `--selector`, `--eval`, or `--title`. Evaluation uses JavaScript truthiness: `false`, `0`, and `null` keep waiting, while the string `"false"` is truthy. A thrown expression fails immediately. Timeouts and polling intervals must be positive integers.
+
 | Option | Description |
 |--------|-------------|
 | `-s, --selector <css>` | Wait for CSS selector to match |
 | `-e, --eval <js>` | Wait for JS expression to be truthy |
-| `-t, --title <regex>` | Wait for window with title (no bridge) |
+| `-t, --title <pattern>` | Wait for window with title (no bridge) |
 | `--timeout <ms>` | Maximum wait time (default: 10000) |
 | `--interval <ms>` | Polling interval (default: 500) |
 
@@ -163,7 +172,7 @@ List all visible windows, marking Tauri apps.
 
 ### `ipc-monitor`
 
-Monitor Tauri IPC calls in real-time (read-only). Monkey-patches Tauri's invoke API (`window.__TAURI_INTERNALS__.invoke`, falling back to `window.__TAURI__.core.invoke`) to capture calls, then polls and restores on exit.
+Monitor Tauri IPC calls in real-time. Monkey-patches Tauri's invoke API (`window.__TAURI_INTERNALS__.invoke`, falling back to `window.__TAURI__.core.invoke`) to capture calls, then polls and restores on exit.
 
 | Option | Description |
 |--------|-------------|
@@ -175,6 +184,8 @@ Monitor Tauri IPC calls in real-time (read-only). Monkey-patches Tauri's invoke 
 ### `console-monitor`
 
 Monitor console output (log/warn/error/info/debug) in real-time. Monkey-patches console methods to capture entries, then polls and restores on exit.
+
+Always set `--duration <ms>` for automated runs. IPC, console, and mutation collectors have independent sessions with 1,000-entry buffers and report overflow on stderr. They collect a final batch before cleanup, including when duration is shorter than the polling interval. Circular values and BigInts are serialized safely. Cleanup also runs on SIGINT/SIGTERM; force-killing the CLI or losing the webview can prevent restoration.
 
 | Option | Description |
 |--------|-------------|
@@ -234,7 +245,7 @@ Capture screenshot + DOM tree + page state + storage in one shot. Writes multipl
 |--------|-------------|
 | `-o, --output <prefix>` | Output path prefix (e.g. `/tmp/debug`) |
 | `-s, --selector <css>` | CSS selector to screenshot (full window if omitted) |
-| `-t, --title <regex>` | Window title to match — regex; quote titles with spaces (default: auto-discover) |
+| `-t, --title <pattern>` | Window title (X11: regex; macOS/Wayland: substring); quote titles with spaces (default: auto-discover) |
 | `-w, --window-id <id>` | Platform window id (from `list-windows`) — overrides `--title` |
 | `--dom-depth <number>` | DOM tree depth (default: 3) |
 | `--eval <js>` | Additional JS to eval and save |
@@ -348,7 +359,7 @@ tauri-agent-tools os-logs --level error --source main --duration 30000
 # Wrap a sidecar, frame its stdout as NDJSON, validate against a JSON Schema
 tauri-agent-tools sidecar tap --schema ./schema.json --record /tmp/run.ndjson -- node my-sidecar.js
 # Replay the recording deterministically — to stdout or into a fresh sidecar's stdin
-tauri-agent-tools sidecar replay /tmp/run.ndjson --to-exec node my-sidecar.js --rate 100
+tauri-agent-tools sidecar replay /tmp/run.ndjson --to-exec "node my-sidecar.js" --rate 100
 tauri-agent-tools sidecar replay /tmp/ipc-tap.ndjson --tap-format --dir out   # (new in 0.9) unwrap {dir,ts,line} tap rows, replay one direction
 
 # Forensic bundle for post-crash analysis (composes the above; works on dead apps)
@@ -382,7 +393,13 @@ tauri-agent-tools bundle --config ./src-tauri -o ./incident --since 10m
 tauri-agent-tools bundle --with-capture                  # also snapshot the UI (needs live bridge)
 ```
 
-`logs` works with no bridge (it reads the on-disk log files); a running bridge just adds the live ring buffer. `bundle` redacts secrets (tokens, API keys, passwords, JWTs, AWS keys) and PII (emails, IPs, phone numbers, home paths — including base64-encoded ones) from artifacts on write; `.json`/`.ndjson` artifacts stay parseable, unredacted images are flagged as warnings, and it degrades cleanly when a phase can't run.
+`logs` works with no bridge (it reads the on-disk log files); a running bridge adds the live ring buffer. `logs`, `rust-logs`, and `capture` use independent cursors on bridge v0.8+, so one consumer does not drain another's entries. Older bridges fall back to draining with a warning. `logs --follow` requires a bridge; `diagnose --no-bridge` skips bridge requests even if a target is supplied.
+
+`bundle` collects into a private temporary directory, redacts text and structured storage credentials, sanitizes its summaries, and scans for remaining secrets before publishing. A redaction failure exits nonzero and prevents publication of the new directory and archive. Missing optional sources are reported as failed phases with `partial: true`; captures also record `partial` and `warnings` in their manifest. Images remain unredacted and are listed as warnings for review before sharing.
+
+The archive contains only artifacts generated by that run. Existing unrelated output files are preserved and excluded from the archive; artifact symlinks are rejected. If archive creation or publication fails, the directory remains available and its summary reports `archive: null`. `--no-archive` intentionally creates only the directory. Automatic redaction cannot guarantee removal of every secret; review the output before sharing it.
+
+For `sidecar replay --to-exec`, quote the whole command, for example `--to-exec "node my-sidecar.js"`. The value is split on spaces; shell syntax and arguments containing spaces are not supported.
 
 ## How It Works
 
@@ -414,9 +431,9 @@ The crop accounts for window decoration (title bar, borders) by comparing `windo
 
 ## Design Decisions
 
-### Inspection is read-only, interaction is debug-only
+### Inspection, evaluation, and interaction
 
-Inspection commands (screenshot, dom, eval, storage, etc.) are strictly read-only — they never modify app state. Interaction commands (click, type, scroll, focus, navigate, select, invoke) use eval-based DOM event dispatch and **only work with the dev bridge** (debug builds). Native input injection (xdotool, Accessibility API) is deliberately avoided:
+Commands such as screenshot, DOM inspection, and storage inspection read app state. `eval` executes arbitrary JavaScript and can modify the app; the bridge does not enforce read-only evaluation. IPC and console monitors, `capture`, and `check --no-errors` temporarily wrap app APIs; mutations installs an observer. Each collector restores its own instrumentation on completion, error, SIGINT, or SIGTERM when the webview is reachable. Interaction commands (click, type, scroll, focus, navigate, select, invoke) use eval-based DOM event dispatch and **only work with the dev bridge** (debug builds). Native input injection (xdotool, Accessibility API) is deliberately avoided:
 
 - **Native input is system-wide and risky.** X11 injection operates globally, not per-window — it can grab the cursor and require a hard reboot.
 - **Eval-based dispatch is per-window and sandboxed.** Interaction commands dispatch DOM events inside the webview via the bridge. They can't affect other apps or the OS.

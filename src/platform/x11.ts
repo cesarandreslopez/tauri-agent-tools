@@ -1,6 +1,6 @@
 import type { PlatformAdapter, WindowInfo } from '../types.js';
 import type { ImageFormat } from '../schemas/commands.js';
-import { exec, validateWindowId } from '../util/exec.js';
+import { exec, ExecError, validateWindowId } from '../util/exec.js';
 import { magickCommand } from '../util/magick.js';
 
 function parseShellVar(output: string, key: string, fallback?: number): number {
@@ -13,9 +13,20 @@ function parseShellVar(output: string, key: string, fallback?: number): number {
 }
 
 export class X11Adapter implements PlatformAdapter {
+  private async searchWindows(title: string): Promise<string[]> {
+    try {
+      const { stdout } = await exec('xdotool', ['search', '--name', title]);
+      return stdout.toString().trim().split('\n').filter(Boolean);
+    } catch (error) {
+      // xdotool returns 1 with no stderr when a search has no matches.
+      // Display, syntax, and missing-command errors must remain actionable.
+      if (error instanceof ExecError && error.code === 1 && error.stderr.trim() === '') return [];
+      throw error;
+    }
+  }
+
   async findWindow(title: string): Promise<string> {
-    const { stdout } = await exec('xdotool', ['search', '--name', title]);
-    const ids = stdout.toString().trim().split('\n').filter(Boolean);
+    const ids = await this.searchWindows(title);
     if (ids.length === 0) {
       throw new Error(`No window found matching: ${title}`);
     }
@@ -51,8 +62,7 @@ export class X11Adapter implements PlatformAdapter {
   }
 
   async listWindows(): Promise<WindowInfo[]> {
-    const { stdout } = await exec('xdotool', ['search', '--name', '']);
-    const ids = stdout.toString().trim().split('\n').filter(Boolean);
+    const ids = await this.searchWindows('');
 
     const windows: WindowInfo[] = [];
     for (const id of ids) {

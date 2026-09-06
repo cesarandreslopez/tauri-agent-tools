@@ -98,7 +98,7 @@ tauri-agent-tools eval "document.title"
 - **Localhost only** — the bridge binds to `127.0.0.1`
 - **Token authenticated** — every request requires a random 32-char token
 - **Development only** — wrapped in `cfg!(debug_assertions)`, stripped in release builds
-- **Inspection is read-only** — inspection commands only read DOM state
+- **Eval is unrestricted** — `/eval` executes arbitrary JavaScript, including writes. Inspection scripts read state; monitors install temporary instrumentation.
 - **Interaction is debug-only** — interaction commands use eval-based DOM dispatch, sandboxed to the webview
 
 ## Troubleshooting

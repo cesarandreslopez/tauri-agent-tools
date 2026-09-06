@@ -8,84 +8,22 @@ vi.mock('../../src/bridge/tokenDiscovery.js', () => ({
 }));
 
 describe('check command', () => {
-  describe('buildSelectorCheck', () => {
-    it('generates correct querySelector JS for a simple selector', () => {
-      const js = buildSelectorCheck('#app');
-      expect(js).toBe("!!document.querySelector('#app')");
+  describe('selector literal encoding', () => {
+    it.each(['#app', '.my-button', 'div > p.text', "input[name='email']", 'div\\nspan', 'div\nspan'])('preserves %s', selector => {
+      const querySelector=vi.fn().mockReturnValue({});
+      expect(new Function('document', `return ${buildSelectorCheck(selector)}`)({querySelector})).toBe(true);
+      expect(querySelector).toHaveBeenCalledWith(selector);
     });
-
-    it('generates correct querySelector JS for a class selector', () => {
-      const js = buildSelectorCheck('.my-button');
-      expect(js).toBe("!!document.querySelector('.my-button')");
-    });
-
-    it('generates correct querySelector JS for a complex selector', () => {
-      const js = buildSelectorCheck('div > p.text');
-      expect(js).toBe("!!document.querySelector('div > p.text')");
-    });
-
-    it('escapes single quotes in the selector', () => {
-      const js = buildSelectorCheck("input[name='email']");
-      expect(js).toBe("!!document.querySelector('input[name=\\'email\\']')");
-    });
-
-    it('escapes backslashes in the selector', () => {
-      const js = buildSelectorCheck('div\\nspan');
-      expect(js).toBe("!!document.querySelector('div\\\\nspan')");
-    });
-
-    it('returns a string starting with !!document.querySelector', () => {
-      const js = buildSelectorCheck('button');
-      expect(js).toMatch(/^!!document\.querySelector\(/);
+    it('leaves promise evaluation to the awaiting evaluator', () => {
+      expect(buildEvalCheck('Promise.resolve(false)')).toBe('Promise.resolve(false)');
     });
   });
 
-  describe('buildEvalCheck', () => {
-    it('generates correct truthy check JS for a simple expression', () => {
-      const js = buildEvalCheck('window.myFlag');
-      expect(js).toBe('!!(window.myFlag)');
-    });
-
-    it('generates correct truthy check JS for a comparison expression', () => {
-      const js = buildEvalCheck('document.querySelectorAll("li").length > 0');
-      expect(js).toBe('!!(document.querySelectorAll("li").length > 0)');
-    });
-
-    it('wraps expression in !!()', () => {
-      const js = buildEvalCheck('1 + 1 === 2');
-      expect(js).toBe('!!(1 + 1 === 2)');
-    });
-
-    it('handles function call expressions', () => {
-      const js = buildEvalCheck('window.checkReady()');
-      expect(js).toBe('!!(window.checkReady())');
-    });
-  });
-
-  describe('buildTextCheck', () => {
-    it('generates correct textContent check JS', () => {
-      const js = buildTextCheck('Hello World');
-      expect(js).toBe("document.body.textContent.includes('Hello World')");
-    });
-
-    it('generates correct check for simple text pattern', () => {
-      const js = buildTextCheck('Welcome');
-      expect(js).toBe("document.body.textContent.includes('Welcome')");
-    });
-
-    it('escapes single quotes in the pattern', () => {
-      const js = buildTextCheck("it's done");
-      expect(js).toBe("document.body.textContent.includes('it\\'s done')");
-    });
-
-    it('escapes backslashes in the pattern', () => {
-      const js = buildTextCheck('path\\to\\file');
-      expect(js).toBe("document.body.textContent.includes('path\\\\to\\\\file')");
-    });
-
-    it('returns a string using document.body.textContent.includes', () => {
-      const js = buildTextCheck('any text');
-      expect(js).toMatch(/^document\.body\.textContent\.includes\(/);
+  describe('text literal encoding', () => {
+    it.each(['Hello World', "it's done", 'path\\to\\file', 'first\nsecond'])('preserves %s', pattern => {
+      const includes = vi.fn().mockReturnValue(true);
+      expect(new Function('document', `return ${buildTextCheck(pattern)}`)({body: {textContent: {includes}}})).toBe(true);
+      expect(includes).toHaveBeenCalledWith(pattern);
     });
   });
 

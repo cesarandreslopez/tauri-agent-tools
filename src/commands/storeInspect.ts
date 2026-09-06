@@ -1,5 +1,5 @@
 import { Command } from 'commander';
-import { addBridgeOptions, resolveBridge, parseIntArg } from './shared.js';
+import { addBridgeOptions, resolveBridge, parseNonNegativeInt } from './shared.js';
 import type { BridgeOpts } from './shared.js';
 import { StoreInspectResultSchema } from '../schemas/commands.js';
 import type { StoreInspectResult } from '../schemas/commands.js';
@@ -146,7 +146,7 @@ export function registerStoreInspect(program: Command): void {
     .description('Inspect reactive stores (Pinia, Vue, or custom app-registered hook)')
     .option('--framework <name>', 'Framework to inspect: auto, pinia, vue', 'auto')
     .option('--store <name>', 'Filter to a specific store by name')
-    .option('--depth <n>', 'Serialization depth', parseIntArg, 3)
+    .option('--depth <n>', 'Serialization depth', parseNonNegativeInt, 3)
     .option('--json', 'Output as JSON');
 
   addBridgeOptions(cmd);

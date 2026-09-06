@@ -2,6 +2,7 @@ import { Command } from 'commander';
 import { spawn } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
+import { CliError } from '../util/errors.js';
 
 interface SidecarReplayOpts {
   toStdout?: boolean;
@@ -35,6 +36,9 @@ export function registerSidecarReplay(program: Command): void {
     .option('--dir <dir>', 'Replay only tap rows in this direction: in | out')
     .option('--loop', 'After EOF, restart the file from the top until interrupted')
     .action(async (file: string, opts: SidecarReplayOpts) => {
+      if (opts.toStdout && opts.toExec) {
+        throw new CliError('INVALID_ARGUMENT', '--to-stdout and --to-exec cannot be combined', 'Choose one replay destination.');
+      }
       if (!existsSync(file)) {
         throw new Error(`Recording file not found: ${file}`);
       }

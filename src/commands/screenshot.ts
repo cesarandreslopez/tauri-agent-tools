@@ -1,9 +1,9 @@
 import { writeFile } from 'node:fs/promises';
 import { Command } from 'commander';
-import type { PlatformAdapter } from '../types.js';
+import type { AdapterFactory } from '../types.js';
 import { ImageFormatSchema } from '../schemas/commands.js';
 import type { ImageFormat } from '../schemas/commands.js';
-import { addBridgeOptions, resolveBridge, resolveWindowId, parseIntArg } from './shared.js';
+import { addBridgeOptions, resolveBridge, resolveWindowId, parsePositiveInt } from './shared.js';
 import { computeCropRect, cropImage, resizeImage } from '../util/image.js';
 
 function autoOutputPath(format: ImageFormat): string {
@@ -13,16 +13,16 @@ function autoOutputPath(format: ImageFormat): string {
 
 export function registerScreenshot(
   program: Command,
-  getAdapter: () => PlatformAdapter | Promise<PlatformAdapter>,
+  getAdapter: AdapterFactory,
 ): void {
   const cmd = new Command('screenshot')
     .description('Capture a screenshot of a window or DOM element')
     .option('-s, --selector <css>', 'CSS selector — screenshot just this element (requires bridge)')
-    .option('-t, --title <regex>', 'Window title to match — regex; quote titles with spaces (default: auto-discover from bridge)')
+    .option('-t, --title <pattern>', 'Window title (X11: regex; macOS/Wayland: substring); quote titles with spaces (default: auto-discover from bridge)')
     .option('-w, --window-id <id>', 'Platform window id (from list-windows) — overrides --title')
     .option('-o, --output <path>', 'Output file path (default: auto-named)')
     .option('--format <fmt>', 'Output format: png or jpg', 'png')
-    .option('--max-width <number>', 'Resize to max width', parseIntArg)
+    .option('--max-width <number>', 'Resize to max width', parsePositiveInt)
     .option('--json', 'Output structured JSON metadata')
     .addHelpText('after', `
 Examples:
@@ -49,7 +49,10 @@ Examples:
       throw new Error(`Invalid format: ${opts.format}. Must be one of: ${ImageFormatSchema.options.join(', ')}`);
     }
     const format = formatResult.data;
-    const adapter = await getAdapter();
+    if (!opts.selector && !opts.title && !opts.windowId) {
+      throw new Error('Either --selector (with bridge), --title, or --window-id is required');
+    }
+    const adapter = await getAdapter(opts.selector || opts.maxWidth || format === 'jpg' ? 'image' : 'capture');
 
     let buffer: Buffer;
     let windowId: string;

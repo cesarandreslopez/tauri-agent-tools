@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+import { parsePositiveInt } from './shared.js';
 import { spawn } from 'node:child_process';
 import * as darwin from '../platform/oslog/darwin.js';
 import * as linux from '../platform/oslog/linux.js';
@@ -152,9 +153,5 @@ function validateLevel(input: string): OsLogLevel {
 
 function parseIntOrInfinity(value: string): number {
   if (value === 'infinity' || value === 'inf') return Number.POSITIVE_INFINITY;
-  const n = parseInt(value, 10);
-  if (!Number.isFinite(n) || n <= 0) {
-    throw new Error(`--duration must be a positive integer (milliseconds), got: ${value}`);
-  }
-  return n;
+  return parsePositiveInt(value);
 }

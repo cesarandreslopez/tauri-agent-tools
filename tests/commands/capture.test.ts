@@ -136,12 +136,12 @@ describe('Capture command', () => {
 
     let callCount = 0;
     // Calls: inject-errors, page-state, window-title, DOM, storage, drain-errors, (rust-logs via fetchLogs POST)
-    const evalResponses = ['ok', pageState, 'Test App', domTree, storage, '[]'];
+    const evalResponses = ['patched', pageState, 'Test App', domTree, storage, '{"entries":[],"dropped":0}', 'cleaned'];
     const mockFetch = vi.fn().mockImplementation((url: string) => {
       if (String(url).includes('/logs')) {
         return Promise.resolve({
           ok: true,
-          json: () => Promise.resolve({ entries: [] }),
+          json: () => Promise.resolve({ entries: [], cursor: 0, dropped: 0 }),
         });
       }
       const result = evalResponses[callCount++];
@@ -178,14 +178,14 @@ describe('Capture command', () => {
     });
     const domTree = JSON.stringify({ tag: 'body', rect: { width: 1280, height: 720 } });
     const storage = JSON.stringify({ localStorage: [], sessionStorage: [] });
-    const evalResponses = ['ok', pageState, domTree, storage, '[]'];
+    const evalResponses = ['patched', pageState, domTree, storage, '{"entries":[],"dropped":0}', 'cleaned'];
     let callCount = 0;
     const bridge = {
       eval: vi.fn(async () => evalResponses[callCount++]),
       getDocumentTitle: vi.fn(async () => 'Library App'),
       getElementRect: vi.fn(),
       getViewportSize: vi.fn(),
-      fetchLogs: vi.fn(async () => []),
+      fetchLogs: vi.fn(async () => ({ entries: [], cursor: 0, dropped: 0 })),
     };
     const adapter = createMockAdapter();
     const { captureToDir } = await import('../../src/commands/capture.js');
@@ -220,14 +220,14 @@ describe('Capture command', () => {
     });
     const domTree = JSON.stringify({ tag: 'body', rect: { width: 1280, height: 720 } });
     const storage = JSON.stringify({ localStorage: [], sessionStorage: [] });
-    const evalResponses = ['ok', pageState, domTree, storage, '[]'];
+    const evalResponses = ['patched', pageState, domTree, storage, '{"entries":[],"dropped":0}', 'cleaned'];
     let callCount = 0;
     const bridge = {
       eval: vi.fn(async () => evalResponses[callCount++]),
       getDocumentTitle: vi.fn(async () => 'Library App'),
       getElementRect: vi.fn(),
       getViewportSize: vi.fn(),
-      fetchLogs: vi.fn(async () => []),
+      fetchLogs: vi.fn(async () => ({ entries: [], cursor: 0, dropped: 0 })),
     };
     const adapter = createMockAdapter();
     const { captureToDir } = await import('../../src/commands/capture.js');
@@ -258,12 +258,12 @@ describe('Capture command', () => {
 
     let callCount = 0;
     // No window-title eval expected — the id is provided directly
-    const evalResponses = ['ok', pageState, domTree, storage, '[]'];
+    const evalResponses = ['patched', pageState, domTree, storage, '{"entries":[],"dropped":0}', 'cleaned'];
     const mockFetch = vi.fn().mockImplementation((url: string) => {
       if (String(url).includes('/logs')) {
         return Promise.resolve({
           ok: true,
-          json: () => Promise.resolve({ entries: [] }),
+          json: () => Promise.resolve({ entries: [], cursor: 0, dropped: 0 }),
         });
       }
       const result = evalResponses[callCount++];
@@ -303,12 +303,12 @@ describe('Capture command', () => {
     const storage = JSON.stringify({ localStorage: [], sessionStorage: [] });
 
     let callCount = 0;
-    const evalResponses = ['ok', pageState, 'Test App', domTree, storage, '[]'];
+    const evalResponses = ['patched', pageState, 'Test App', domTree, storage, '{"entries":[],"dropped":0}', 'cleaned'];
     const mockFetch = vi.fn().mockImplementation((url: string) => {
       if (String(url).includes('/logs')) {
         return Promise.resolve({
           ok: true,
-          json: () => Promise.resolve({ entries: [] }),
+          json: () => Promise.resolve({ entries: [], cursor: 0, dropped: 0 }),
         });
       }
       const result = evalResponses[callCount++];
@@ -354,12 +354,12 @@ describe('Capture command', () => {
     const storage = JSON.stringify({ localStorage: [], sessionStorage: [] });
 
     let callCount = 0;
-    const evalResponses = ['ok', pageState, 'App', domTree, storage, '[]'];
+    const evalResponses = ['patched', pageState, 'App', domTree, storage, '{"entries":[],"dropped":0}', 'cleaned'];
     const mockFetch = vi.fn().mockImplementation((url: string) => {
       if (String(url).includes('/logs')) {
         return Promise.resolve({
           ok: true,
-          json: () => Promise.resolve({ entries: [] }),
+          json: () => Promise.resolve({ entries: [], cursor: 0, dropped: 0 }),
         });
       }
       const result = evalResponses[callCount++];
@@ -401,7 +401,7 @@ describe('Capture command', () => {
       callCount++;
       if (callCount === 1) {
         // inject-console-errors OK
-        return Promise.resolve({ ok: true, json: () => Promise.resolve({ result: 'ok' }) });
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ result: 'patched' }) });
       }
       // All subsequent bridge evals fail (page-state, dom, storage, drain-errors)
       return Promise.resolve({ ok: false, status: 500, text: () => Promise.resolve('Internal error') });
@@ -445,13 +445,13 @@ describe('Capture command', () => {
     });
     const domTree = JSON.stringify({ tag: 'body', rect: { width: 100, height: 100 } });
     const storage = JSON.stringify({ localStorage: [], sessionStorage: [] });
-    const evalResult = JSON.stringify({ custom: 'data' });
+    const evalResult = JSON.stringify({ ok: true, value: { custom: 'data' }, truthy: true });
 
     let callCount = 0;
-    const evalResponses = ['ok', pageState, 'T', domTree, storage, '[]', evalResult];
+    const evalResponses = ['patched', pageState, 'T', domTree, storage, '{"entries":[],"dropped":0}', evalResult, 'cleaned'];
     const mockFetch = vi.fn().mockImplementation((url: string) => {
       if (String(url).includes('/logs')) {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve({ entries: [] }) });
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ entries: [], cursor: 0, dropped: 0 }) });
       }
       const result = evalResponses[callCount++];
       return Promise.resolve({ ok: true, json: () => Promise.resolve({ result }) });

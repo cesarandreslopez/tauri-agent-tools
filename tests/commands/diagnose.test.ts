@@ -38,11 +38,13 @@ function spinServer(
 
 let workspace: string;
 let modern: { port: number; close: () => Promise<void> };
+let bridgeRequests = 0;
 
 beforeAll(async () => {
   workspace = mkdtempSync(join(tmpdir(), 'diagnose-test-'));
 
   modern = await spinServer(async (req, res) => {
+    bridgeRequests++;
     if (req.method === 'GET' && req.url === '/version') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(
@@ -116,6 +118,15 @@ function scaffold(name: string, files: Record<string, string>): string {
 }
 
 describe('diagnose command (e2e)', () => {
+  it('never contacts a reachable explicit target when --no-bridge is set', async () => {
+    const before = bridgeRequests;
+    const project = scaffold('explicit-target-skipped', { 'tauri.conf.json': '{"identifier":"com.fixture.skip"}' });
+    await execFileP(process.execPath, [CLI, 'diagnose', '--config',
+      project, '-o', join(workspace, 'explicit-skipped'), '--logs-duration', '100',
+      '--no-bridge', '--port', String(modern.port), '--token', TOKEN, '--json']);
+    expect(bridgeRequests).toBe(before);
+    expect(JSON.parse(readFileSync(join(workspace, 'explicit-skipped/bridge.json'), 'utf8')).reachable).toBe(false);
+  });
   it('with --no-bridge produces a forensics-only bundle and an explanatory summary', async () => {
     const project = scaffold('proj-nobridge', {
       'src-tauri/tauri.conf.json': JSON.stringify({

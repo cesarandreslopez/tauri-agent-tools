@@ -4,7 +4,7 @@ import { detectDisplayServer } from '../platform/detect.js';
 import { BridgeClient } from '../bridge/client.js';
 import { addBridgeOptions, resolveBridge, tryResolveBridgeConfig } from './shared.js';
 import type { BridgeOpts } from './shared.js';
-import { discoverBridgesByPid, discoverBridge } from '../bridge/tokenDiscovery.js';
+import { discoverBridgesByPid } from '../bridge/tokenDiscovery.js';
 import type { DescribeResponse, VersionResponse } from '../schemas/bridge.js';
 
 interface PageInfo {
@@ -14,6 +14,9 @@ interface PageInfo {
 }
 
 interface TargetInfo {
+  pid: number | null;
+  port: number | null;
+  windowLabel: string;
   alive: boolean;
   version: VersionResponse | null;
   describe: DescribeResponse | null;
@@ -58,6 +61,7 @@ export function registerProbe(program: Command): void {
         const result: ProbeResult = {
           bridges: allBridges,
           target: {
+            pid: null, port: null, windowLabel: opts.windowLabel ?? 'main',
             alive: false,
             version: null,
             describe: null,
@@ -106,39 +110,35 @@ export function registerProbe(program: Command): void {
     let viewport: { width: number; height: number } | null = null;
 
     try {
-      url = String(await bridge.eval('window.location.href'));
+      if (alive) url = String(await bridge.eval('window.location.href'));
     } catch {
       // bridge may be unreachable or page not loaded
     }
 
     try {
-      title = String(await bridge.eval('document.title'));
+      if (alive) title = String(await bridge.eval('document.title'));
     } catch {
       // ignore
     }
 
     try {
-      viewport = await bridge.getViewportSize();
+      if (alive) viewport = await bridge.getViewportSize();
     } catch {
       // ignore
     }
 
-    // Determine the port for the target by checking opts or discovered bridge
-    let targetPort = opts.port;
-    if (targetPort === undefined) {
-      if (opts.pid !== undefined) {
-        const pidEntry = bridgesByPid.get(opts.pid);
-        targetPort = pidEntry?.port;
-      }
-      if (targetPort === undefined) {
-        const first = await discoverBridge();
-        targetPort = first?.port;
-      }
-    }
+    const targetPort = bridge.port;
+    const targetPid = describeInfo?.pid ?? allBridges.find(b => b.port === targetPort)?.pid ?? null;
+    const ambiguity = !hasExplicitTarget && allBridges.length > 1
+      ? `Auto-selected PID ${targetPid ?? '?'} on port ${targetPort}. Use --pid <n> to select among ${allBridges.length} bridges.`
+      : undefined;
+    if (ambiguity) console.error(`note: ${ambiguity}`);
 
     const result: ProbeResult = {
       bridges: allBridges,
       target: {
+        pid: targetPid, port: targetPort, windowLabel: opts.windowLabel ?? 'main',
+        ...(ambiguity ? { note: ambiguity } : {}),
         alive,
         version: versionInfo,
         describe: describeInfo,
@@ -168,6 +168,7 @@ export function registerProbe(program: Command): void {
     console.log('');
     console.log(`Platform:         ${platform}`);
     console.log(`Bridge alive:     ${alive ? 'yes' : 'no'}`);
+    console.log(`Selected target:  PID ${targetPid ?? '?'}  port ${targetPort}  window ${opts.windowLabel ?? 'main'}`);
 
     if (versionInfo) {
       console.log(`Bridge version:   ${versionInfo.version}`);

@@ -3,9 +3,8 @@ import { spawn } from 'node:child_process';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { addBridgeOptions, type BridgeOpts } from './shared.js';
+import { addBridgeOptions, parsePositiveInt, tryResolveBridgeConfig, type BridgeOpts } from './shared.js';
 import { BridgeClient } from '../bridge/client.js';
-import { discoverBridge, discoverBridgesByPid } from '../bridge/tokenDiscovery.js';
 import type {
   CapabilitiesResponse,
   DevtoolsResponse,
@@ -19,10 +18,10 @@ interface DiagnoseOpts extends BridgeOpts {
   identifier?: string;
   out?: string;
   since?: string;
-  logsDuration?: string;
+  logsDuration?: number;
   json?: boolean;
   /** Skip the bridge-enrichment phase even if a bridge is reachable. */
-  noBridge?: boolean;
+  bridge?: boolean;
 }
 
 interface PhaseOutcome {
@@ -53,6 +52,7 @@ export function registerDiagnose(program: Command): void {
     .option(
       '--logs-duration <ms>',
       'Time budget for live OS-log tail in milliseconds (default: 3000)',
+      parsePositiveInt,
     )
     .option('--no-bridge', 'Skip bridge-enrichment phase even if a bridge is reachable')
     .option('--json', 'Print the master summary as JSON in addition to writing to disk');
@@ -156,7 +156,7 @@ function runSelf(args: string[]): Promise<void> {
       return;
     }
     const child = spawn(process.execPath, [cliPath, ...args], {
-      stdio: ['ignore', 'pipe', 'pipe'],
+      stdio: ['ignore', 'ignore', 'pipe'],
     });
     let stderr = '';
     child.stderr.setEncoding('utf-8');
@@ -189,7 +189,7 @@ async function collectBridgeData(opts: DiagnoseOpts, outcomes: PhaseOutcome[]): 
     errors: {},
   };
 
-  if (opts.noBridge) {
+  if (opts.bridge === false) {
     outcomes.push({ phase: 'bridge', ok: true, detail: 'skipped (--no-bridge)' });
     return data;
   }
@@ -231,33 +231,6 @@ async function collectBridgeData(opts: DiagnoseOpts, outcomes: PhaseOutcome[]): 
   }
 
   return data;
-}
-
-async function tryResolveBridgeConfig(
-  opts: BridgeOpts,
-): Promise<{ port: number; token: string } | null> {
-  try {
-    if (opts.port && opts.token) {
-      return { port: opts.port, token: opts.token };
-    }
-    if (opts.pid !== undefined) {
-      const bridges = await discoverBridgesByPid();
-      const match = bridges.get(opts.pid);
-      if (!match) return null;
-      return {
-        port: opts.port ?? match.port,
-        token: opts.token ?? match.token,
-      };
-    }
-    const discovered = await discoverBridge();
-    if (!discovered) return null;
-    return {
-      port: opts.port ?? discovered.port,
-      token: opts.token ?? discovered.token,
-    };
-  } catch {
-    return null;
-  }
 }
 
 function renderMaster(

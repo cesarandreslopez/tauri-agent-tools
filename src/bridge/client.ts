@@ -55,6 +55,7 @@ interface FetchLogsCursorResponse {
 
 export class BridgeClient {
   private baseUrl: string;
+  readonly port: number;
   private token: string;
   private windowLabel: string | undefined;
   /** Cached `/version` response. Populated by `requireEndpoint` on first call. */
@@ -63,6 +64,7 @@ export class BridgeClient {
   private versionUnreachable = false;
 
   constructor(config: BridgeConfig, windowLabel?: string) {
+    this.port = config.port;
     this.baseUrl = `http://127.0.0.1:${config.port}`;
     this.token = config.token;
     this.windowLabel = windowLabel;

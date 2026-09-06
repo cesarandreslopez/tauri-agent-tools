@@ -1,7 +1,10 @@
 import { Command } from 'commander';
-import { resolveBridge, parseIntArg } from '../shared.js';
+import { resolveBridge, parseNonNegativeInt } from '../shared.js';
 import type { BridgeClient } from '../../bridge/client.js';
 import { addInteractOptions, escapeSelector } from './shared.js';
+import { evaluateExpression } from '../../bridge/evaluate.js';
+import { pollUntil } from '../../util/poll.js';
+import { CliError } from '../../util/errors.js';
 import { ClickResultSchema } from '../../schemas/interact.js';
 
 export function buildClickScript(
@@ -31,58 +34,13 @@ export function buildClickScript(
 })()`;
 }
 
-function buildWaitAndClickScript(
-  selector: string,
-  opts: { double: boolean; right: boolean },
-  waitMs: number,
-): string {
-  const escaped = escapeSelector(selector);
-  const button = opts.right ? 2 : 0;
-  const clickEvents = opts.right
-    ? `el.dispatchEvent(new MouseEvent('contextmenu', eventOpts));`
-    : opts.double
-      ? `el.dispatchEvent(new MouseEvent('click', eventOpts));
-      el.dispatchEvent(new MouseEvent('dblclick', eventOpts));`
-      : `el.dispatchEvent(new MouseEvent('click', eventOpts));`;
-
-  return `(() => {
-  var deadline = Date.now() + ${waitMs};
-  function attempt() {
-    var el = document.querySelector('${escaped}');
-    if (el) {
-      var r = el.getBoundingClientRect();
-      var clientX = r.left + r.width / 2;
-      var clientY = r.top + r.height / 2;
-      var eventOpts = { bubbles: true, cancelable: true, clientX: clientX, clientY: clientY, button: ${button} };
-      el.dispatchEvent(new MouseEvent('mousedown', eventOpts));
-      el.dispatchEvent(new MouseEvent('mouseup', eventOpts));
-      ${clickEvents}
-      var text = (el.textContent || '').trim().slice(0, 100);
-      return JSON.stringify({ success: true, selector: '${escaped}', tagName: el.tagName.toLowerCase(), text: text });
-    }
-    if (Date.now() >= deadline) {
-      return JSON.stringify({ success: false, selector: '${escaped}', error: 'Element not found' });
-    }
-    return null;
-  }
-  return new Promise(function(resolve) {
-    function poll() {
-      var result = attempt();
-      if (result !== null) { resolve(result); return; }
-      setTimeout(poll, 100);
-    }
-    poll();
-  });
-})()`;
-}
-
 export function registerClick(program: Command): void {
   const cmd = new Command('click')
     .description('Dispatch mouse click events on a DOM element')
     .argument('<selector>', 'CSS selector of the element to click')
     .option('--double', 'Dispatch a double-click (dblclick) instead of a single click')
     .option('--right', 'Dispatch a right-click (contextmenu) instead of a left click')
-    .option('--wait <ms>', 'Wait up to <ms> milliseconds for element to appear', parseIntArg, 0)
+    .option('--wait <ms>', 'Wait up to <ms> milliseconds for element to appear', parseNonNegativeInt, 0)
     .addHelpText('after', `
 Examples:
   $ tauri-agent-tools click "button.submit"
@@ -100,12 +58,18 @@ Examples:
     port?: number;
     token?: string;
   }) => {
+    if (opts.double && opts.right) throw new CliError('INVALID_ARGUMENT', '--double and --right cannot be combined', 'Choose one click type.');
     const bridge: BridgeClient = await resolveBridge(opts);
 
     const clickOpts = { double: !!opts.double, right: !!opts.right };
-    const script = opts.wait > 0
-      ? buildWaitAndClickScript(selector, clickOpts, opts.wait)
-      : buildClickScript(selector, clickOpts);
+    if (opts.wait > 0) {
+      await pollUntil(async remaining => {
+        const result = await evaluateExpression(bridge,
+          `document.querySelector(${JSON.stringify(selector)}) !== null`, Math.min(5000, remaining));
+        return result.truthy ? true : null;
+      }, opts.wait, 100, `Timed out waiting for element: ${selector}`);
+    }
+    const script = buildClickScript(selector, clickOpts);
 
     const raw = await bridge.eval(script);
     const result = ClickResultSchema.parse(JSON.parse(String(raw)));

@@ -1,17 +1,18 @@
 import { Command } from 'commander';
-import type { PlatformAdapter } from '../types.js';
+import type { AdapterFactory } from '../types.js';
 import { detectDisplayServer } from '../platform/detect.js';
 
 export function registerInfo(
   program: Command,
-  getAdapter: () => PlatformAdapter | Promise<PlatformAdapter>,
+  getAdapter: AdapterFactory,
 ): void {
   const cmd = new Command('info')
     .description('Show window geometry and display server info')
-    .option('-t, --title <regex>', 'Window title to match — regex; quote titles with spaces')
+    .option('-t, --title <pattern>', 'Window title (X11: regex; macOS/Wayland: substring); quote titles with spaces')
     .option('-w, --window-id <id>', 'Platform window id (from list-windows) — overrides --title')
     .option('--json', 'Output as JSON')
     .action(async (opts: { title?: string; windowId?: string; json?: boolean }) => {
+      if (!opts.title && !opts.windowId) throw new Error('Either --title or --window-id is required');
       const adapter = await getAdapter();
       let windowId: string;
       if (opts.windowId) {

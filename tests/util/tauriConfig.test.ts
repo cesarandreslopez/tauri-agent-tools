@@ -73,6 +73,30 @@ describe('findTauriConfig', () => {
 });
 
 describe('loadTauriConfig', () => {
+  it('parses JSON5 without stripping URL or comment-like string content', async () => {
+    const root = scaffold('real-json5', {
+      'tauri.conf.json': `{
+        // comment outside strings
+        identifier: 'com.fixture.json5',
+        build: { devUrl: 'http://localhost:1420/path//segment', },
+        productName: 'text /* kept */ ,}',
+      }`,
+      'capabilities/default.json': `{
+        identifier: 'default', // comment
+        windows: ['main',],
+        permissions: [{identifier: 'http:default', allow: [{url: 'https://example.com/*'},],},],
+      }`,
+    });
+    const loaded = await loadTauriConfig({ configPath: root });
+    expect(resolveDevPort(loaded.raw)).toBe(1420);
+    expect(loaded.raw.productName).toBe('text /* kept */ ,}');
+    const cap = await loadCapability(join(root, 'capabilities/default.json'));
+    expect(cap.permissions[0]).toMatchObject({ allow: [{ url: 'https://example.com/*' }] });
+  });
+  it('names the config file when parsing fails', async () => {
+    const root = scaffold('invalid-json5', { 'tauri.conf.json': '{ identifier: ' });
+    await expect(loadTauriConfig({ configPath: root })).rejects.toThrow(join(root, 'tauri.conf.json'));
+  });
   it('loads a minimal config and exposes the project directory', async () => {
     const root = scaffold('load-min', {
       'tauri.conf.json': JSON.stringify({ identifier: 'com.test.app', productName: 'TestApp' }),

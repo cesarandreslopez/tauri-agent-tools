@@ -2,14 +2,15 @@
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
-import { Command } from 'commander';
-import type { DisplayServer, PlatformAdapter } from './types.js';
+import { Command, CommanderError } from 'commander';
+import type { AdapterOperation, PlatformAdapter } from './types.js';
 import { detectDisplayServer, ensureTools } from './platform/detect.js';
 import { PackageJsonSchema } from './schemas/commands.js';
 import { X11Adapter } from './platform/x11.js';
 import { WaylandAdapter } from './platform/wayland.js';
 import { HyprlandAdapter } from './platform/hyprland.js';
 import { MacOSAdapter } from './platform/macos.js';
+import { errorDetail } from './util/errors.js';
 import { registerScreenshot } from './commands/screenshot.js';
 import { registerInfo } from './commands/info.js';
 import { registerDom } from './commands/dom.js';
@@ -57,19 +58,20 @@ const program = new Command()
   .description('Agent-driven inspection toolkit for Tauri desktop apps')
   .version(pkg.version);
 
-let checkedTools: DisplayServer | null = null;
+const checkedTools = new Set<string>();
 
-async function getAdapter(): Promise<PlatformAdapter> {
+async function getAdapter(operation: AdapterOperation = 'inspect'): Promise<PlatformAdapter> {
   const ds = detectDisplayServer();
   if (ds === 'unknown') {
     throw new Error(
-      'Could not detect display server. Set DISPLAY (X11) or WAYLAND_DISPLAY (Wayland).',
+      process.platform === 'win32' ? 'Native window inspection is supported on macOS and Linux. Bridge and bridge-free diagnostic commands remain available.' : 'Could not detect display server. Set DISPLAY (X11) or WAYLAND_DISPLAY (Wayland).',
     );
   }
 
-  if (checkedTools !== ds) {
-    await ensureTools(ds);
-    checkedTools = ds;
+  const key = `${ds}:${operation}`;
+  if (!checkedTools.has(key)) {
+    await ensureTools(ds, operation);
+    checkedTools.add(key);
   }
 
   if (ds === 'darwin') return new MacOSAdapter();
@@ -123,7 +125,21 @@ registerHealth(program);
 registerDiagnose(program);
 registerBundle(program);
 
+const args = process.argv.slice(2);
+const endOfOptions = args.indexOf('--');
+const jsonRequested = (endOfOptions === -1 ? args : args.slice(0, endOfOptions)).includes('--json');
+function configureErrors(command: Command): void {
+  command.exitOverride();
+  command.configureOutput({ writeErr: message => { if (!jsonRequested) process.stderr.write(message); } });
+  command.commands.forEach(configureErrors);
+}
+configureErrors(program);
 program.parseAsync().catch((err: unknown) => {
-  console.error(err instanceof Error ? err.message : String(err));
+  if (err instanceof CommanderError && err.exitCode === 0) return;
+  const detail = err instanceof CommanderError
+    ? { code: 'INVALID_ARGUMENT', message: err.message, hint: 'Use this command with --help for supported options.' }
+    : errorDetail(err);
+  if (jsonRequested) console.error(JSON.stringify({ error: detail }));
+  else if (!(err instanceof CommanderError)) console.error(`${detail.message}\nHint: ${detail.hint}`);
   process.exitCode = 1;
 });

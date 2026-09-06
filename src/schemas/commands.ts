@@ -96,6 +96,8 @@ export const CaptureManifestSchema = z.object({
   title: z.string().optional(),
   viewport: z.object({ width: z.number(), height: z.number() }).optional(),
   errorCount: z.number().optional(),
+  partial: z.boolean().optional(),
+  warnings: z.array(z.string()).optional(),
   files: z.record(z.string(), z.string()),
 });
 export type CaptureManifest = z.infer<typeof CaptureManifestSchema>;

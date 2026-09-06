@@ -25,3 +25,6 @@ export interface WindowListEntry extends WindowInfo {
   tauri: boolean;
   bridge?: BridgeConfig;
 }
+
+export type AdapterOperation = 'inspect' | 'capture' | 'image';
+export type AdapterFactory = (operation?: AdapterOperation) => PlatformAdapter | Promise<PlatformAdapter>;

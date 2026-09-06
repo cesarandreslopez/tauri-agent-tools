@@ -1,52 +1,24 @@
 import { Command } from 'commander';
-import { addBridgeOptions, resolveBridge, parseIntArg } from './shared.js';
+import { addBridgeOptions, resolveBridge, parsePositiveInt } from './shared.js';
 import type { BridgeOpts } from './shared.js';
+import { evaluateExpression } from '../bridge/evaluate.js';
+import { consoleObserver, readObserver, closeObserver } from '../bridge/observers.js';
+import { monitorFor } from '../util/monitor.js';
+import { ConsoleEntrySchema } from '../schemas/commands.js';
+import { z } from 'zod';
+import { CliError } from '../util/errors.js';
 import type { CheckItem } from '../schemas/commands.js';
 
-const ERROR_PATCH_SCRIPT = `(() => {
-  if (window.__tauriDevToolsErrorPatched) return 'already_patched';
-  window.__tauriDevToolsOriginalConsoleError = console.error;
-  window.__tauriDevToolsErrorBuffer = [];
-  console.error = function() {
-    var args = Array.prototype.slice.call(arguments);
-    var message = args.map(function(a) {
-      return typeof a === 'object' ? JSON.stringify(a) : String(a);
-    }).join(' ');
-    window.__tauriDevToolsErrorBuffer.push(message);
-    window.__tauriDevToolsOriginalConsoleError.apply(console, arguments);
-  };
-  window.__tauriDevToolsErrorPatched = true;
-  return 'patched';
-})()`;
-
-const ERROR_DRAIN_SCRIPT = `(() => {
-  var buf = window.__tauriDevToolsErrorBuffer || [];
-  window.__tauriDevToolsErrorBuffer = [];
-  return JSON.stringify(buf);
-})()`;
-
-const ERROR_CLEANUP_SCRIPT = `(() => {
-  if (window.__tauriDevToolsOriginalConsoleError) {
-    console.error = window.__tauriDevToolsOriginalConsoleError;
-    delete window.__tauriDevToolsOriginalConsoleError;
-    delete window.__tauriDevToolsErrorBuffer;
-    delete window.__tauriDevToolsErrorPatched;
-  }
-  return 'cleaned';
-})()`;
-
 export function buildSelectorCheck(selector: string): string {
-  const escaped = selector.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-  return `!!document.querySelector('${escaped}')`;
+  return `!!document.querySelector(${JSON.stringify(selector)})`;
 }
 
 export function buildEvalCheck(expression: string): string {
-  return `!!(${expression})`;
+  return expression;
 }
 
 export function buildTextCheck(pattern: string): string {
-  const escaped = pattern.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-  return `document.body.textContent.includes('${escaped}')`;
+  return `document.body.textContent.includes(${JSON.stringify(pattern)})`;
 }
 
 export function registerCheck(program: Command): void {
@@ -56,7 +28,7 @@ export function registerCheck(program: Command): void {
     .option('--eval <js>', 'Assert that a JavaScript expression is truthy')
     .option('--text <pattern>', 'Assert that body text contains the pattern')
     .option('--no-errors', 'Assert that no console.error calls occurred during --duration')
-    .option('--duration <ms>', 'Duration to wait for --no-errors check (ms)', parseIntArg, 3000)
+    .option('--duration <ms>', 'Duration to wait for --no-errors check (ms)', parsePositiveInt, 3000)
     .option('--json', 'Output results as JSON');
 
   addBridgeOptions(cmd);
@@ -69,6 +41,9 @@ export function registerCheck(program: Command): void {
     duration: number;
     json?: boolean;
   }) => {
+    if (opts.selector === undefined && opts.eval === undefined && opts.text === undefined && opts.errors !== false) {
+      throw new CliError('INVALID_ARGUMENT', 'At least one assertion is required', 'Use --selector, --eval, --text, or --no-errors.');
+    }
     const bridge = await resolveBridge(opts);
     const checks: CheckItem[] = [];
 
@@ -76,10 +51,10 @@ export function registerCheck(program: Command): void {
     if (opts.selector !== undefined) {
       try {
         const js = buildSelectorCheck(opts.selector);
-        const result = await bridge.eval(js);
+        const result = await evaluateExpression(bridge, js);
         checks.push({
           type: 'selector',
-          passed: result === true || result === 'true',
+          passed: result.truthy,
           selector: opts.selector,
         });
       } catch (err) {
@@ -96,10 +71,10 @@ export function registerCheck(program: Command): void {
     if (opts.eval !== undefined) {
       try {
         const js = buildEvalCheck(opts.eval);
-        const result = await bridge.eval(js);
+        const result = await evaluateExpression(bridge, js);
         checks.push({
           type: 'eval',
-          passed: result === true || result === 'true',
+          passed: result.truthy,
           expression: opts.eval,
         });
       } catch (err) {
@@ -116,10 +91,10 @@ export function registerCheck(program: Command): void {
     if (opts.text !== undefined) {
       try {
         const js = buildTextCheck(opts.text);
-        const result = await bridge.eval(js);
+        const result = await evaluateExpression(bridge, js);
         checks.push({
           type: 'text',
-          passed: result === true || result === 'true',
+          passed: result.truthy,
           pattern: opts.text,
         });
       } catch (err) {
@@ -134,26 +109,27 @@ export function registerCheck(program: Command): void {
 
     // No-errors check (opts.errors === false when --no-errors is passed)
     if (opts.errors === false) {
+      const scripts = consoleObserver();
+      const warnings: string[] = [];
+      const warn = (message: string) => { warnings.push(message); console.error(message); };
       try {
-        await bridge.eval(ERROR_PATCH_SCRIPT);
-        await new Promise((resolve) => setTimeout(resolve, opts.duration));
-        const raw = await bridge.eval(ERROR_DRAIN_SCRIPT);
-        await bridge.eval(ERROR_CLEANUP_SCRIPT).catch(() => {
-          // Best-effort cleanup
+        const status = await bridge.eval(scripts.patch);
+        if (status !== 'patched') throw new Error(`Observer setup failed: ${String(status)}`);
+        const errors: string[] = [];
+        await monitorFor({ interval: Math.min(500, opts.duration), duration: opts.duration }, async () => {
+          const entries = z.array(ConsoleEntrySchema).parse(await readObserver(bridge, scripts, warn));
+          errors.push(...entries.filter(e => e.level === 'error').map(e => e.message));
         });
-        const errors = JSON.parse(String(raw)) as string[];
-        checks.push({
-          type: 'no-errors',
-          passed: errors.length === 0,
-          errors,
-        });
+        checks.push({ type: 'no-errors', passed: errors.length === 0, errors });
       } catch (err) {
-        checks.push({
-          type: 'no-errors',
-          passed: false,
-          errors: [],
-          error: err instanceof Error ? err.message : String(err),
-        });
+        checks.push({ type: 'no-errors', passed: false, errors: [], error: err instanceof Error ? err.message : String(err) });
+      } finally {
+        await closeObserver(bridge, scripts, warn);
+        if (warnings.length) {
+          const check = checks[checks.length - 1]!;
+          check.passed = false;
+          check.error = [check.error, ...warnings].filter(Boolean).join('; ');
+        }
       }
     }
 

@@ -1,3 +1,4 @@
+import JSON5 from 'json5';
 import { readFile, readdir, stat } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
@@ -75,7 +76,9 @@ export async function loadTauriConfig(opts: ConfigLoadOptions = {}): Promise<Loa
   }
 
   const text = await readFile(configPath, 'utf-8');
-  const parsed = parseJsonWithComments(text);
+  let parsed: unknown;
+  try { parsed = JSON5.parse(text); }
+  catch (error) { throw new Error(`Could not parse ${configPath}: ${error instanceof Error ? error.message : String(error)}`); }
   const raw = TauriConfigSchema.parse(parsed);
 
   return {
@@ -83,22 +86,6 @@ export async function loadTauriConfig(opts: ConfigLoadOptions = {}): Promise<Loa
     projectDir: dirname(configPath),
     raw,
   };
-}
-
-/**
- * Permissive JSON parser that strips line comments and trailing commas, since
- * tauri.conf.json files are sometimes authored as JSON5/JSONC in the wild.
- */
-function parseJsonWithComments(text: string): unknown {
-  try {
-    return JSON.parse(text);
-  } catch {
-    const stripped = text
-      .replace(/\/\/[^\n]*/g, '')
-      .replace(/\/\*[\s\S]*?\*\//g, '')
-      .replace(/,(\s*[}\]])/g, '$1');
-    return JSON.parse(stripped);
-  }
 }
 
 /**
@@ -236,7 +223,9 @@ export async function findCapabilityFiles(
 
 export async function loadCapability(filePath: string): Promise<Capability> {
   const text = await readFile(filePath, 'utf-8');
-  const parsed = parseJsonWithComments(text);
+  let parsed: unknown;
+  try { parsed = JSON5.parse(text); }
+  catch (error) { throw new Error(`Could not parse ${filePath}: ${error instanceof Error ? error.message : String(error)}`); }
   return CapabilitySchema.parse(parsed);
 }
 

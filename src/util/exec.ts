@@ -12,6 +12,18 @@ export interface ExecResult {
   stderr: string;
 }
 
+export class ExecError extends Error {
+  constructor(
+    message: string,
+    public readonly code: number | string | null | undefined,
+    public readonly stdout: Buffer,
+    public readonly stderr: string,
+  ) {
+    super(message);
+    this.name = 'ExecError';
+  }
+}
+
 export function exec(
   cmd: string,
   args: string[],
@@ -29,7 +41,8 @@ export function exec(
       (error, stdout, stderr) => {
         if (error) {
           const stderrStr = Buffer.isBuffer(stderr) ? stderr.toString() : String(stderr ?? '');
-          reject(new Error(`${cmd} failed: ${stderrStr || error.message}`));
+          reject(new ExecError(`${cmd} failed: ${stderrStr || error.message}`, error.code,
+            Buffer.isBuffer(stdout) ? stdout : Buffer.from(stdout ?? ''), stderrStr));
           return;
         }
         resolve({
