@@ -1,27 +1,44 @@
+/** Own signal handlers for the entire collector, including setup and cleanup. */
+export function createSignalScope(): { signal: AbortSignal; dispose: () => void } {
+  const controller = new AbortController();
+  const interrupt = (): void => controller.abort('SIGINT');
+  const terminate = (): void => controller.abort('SIGTERM');
+  process.on('SIGINT', interrupt);
+  process.on('SIGTERM', terminate);
+  return {
+    signal: controller.signal,
+    dispose: () => {
+      process.off('SIGINT', interrupt);
+      process.off('SIGTERM', terminate);
+    },
+  };
+}
+
 /** Signal-aware polling with a final sample, including durations below interval. */
 export async function monitorFor(
-  opts: { interval: number; duration?: number },
+  opts: { interval: number; duration?: number; signal?: AbortSignal },
   sample: () => Promise<void>,
-): Promise<void> {
+): Promise<'completed' | 'interrupted'> {
   const deadline = opts.duration === undefined ? Infinity : Date.now() + opts.duration;
-  let stopped = false;
-  let wake: (() => void) | undefined;
-  const stop = (): void => { stopped = true; wake?.(); };
-  process.on('SIGINT', stop);
-  process.on('SIGTERM', stop);
+  const ownedScope = opts.signal ? undefined : createSignalScope();
+  const signal = opts.signal ?? ownedScope!.signal;
   try {
     do {
-      if (!stopped) {
+      if (!signal.aborted) {
         await new Promise<void>(resolve => {
-          const timer = setTimeout(resolve, Math.max(0, Math.min(opts.interval, deadline - Date.now())));
-          wake = () => { clearTimeout(timer); resolve(); };
+          const finish = (): void => {
+            clearTimeout(timer);
+            signal.removeEventListener('abort', finish);
+            resolve();
+          };
+          const timer = setTimeout(finish, Math.max(0, Math.min(opts.interval, deadline - Date.now())));
+          signal.addEventListener('abort', finish, { once: true });
         });
-        wake = undefined;
       }
       await sample();
-    } while (!stopped && Date.now() < deadline);
+    } while (!signal.aborted && Date.now() < deadline);
+    return signal.aborted ? 'interrupted' : 'completed';
   } finally {
-    process.off('SIGINT', stop);
-    process.off('SIGTERM', stop);
+    ownedScope?.dispose();
   }
 }

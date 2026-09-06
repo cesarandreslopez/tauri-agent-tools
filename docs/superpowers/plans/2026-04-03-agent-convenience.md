@@ -1,5 +1,7 @@
 # Agent Convenience Overhaul Implementation Plan
 
+> Historical v0.6 design record. Proposed commands and examples below may differ from the current CLI; use the current command reference for supported behavior.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add interaction commands, workflow abstractions, multi-window targeting, and state observability to tauri-agent-tools, growing it from 14 read-only commands to ~25 commands that let agents drive and debug Tauri apps end-to-end.

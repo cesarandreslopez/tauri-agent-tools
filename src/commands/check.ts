@@ -3,10 +3,10 @@ import { addBridgeOptions, resolveBridge, parsePositiveInt } from './shared.js';
 import type { BridgeOpts } from './shared.js';
 import { evaluateExpression } from '../bridge/evaluate.js';
 import { consoleObserver, readObserver, closeObserver } from '../bridge/observers.js';
-import { monitorFor } from '../util/monitor.js';
+import { monitorFor, createSignalScope } from '../util/monitor.js';
 import { ConsoleEntrySchema } from '../schemas/commands.js';
 import { z } from 'zod';
-import { CliError } from '../util/errors.js';
+import { CliError } from '../errors.js';
 import type { CheckItem } from '../schemas/commands.js';
 
 export function buildSelectorCheck(selector: string): string {
@@ -110,21 +110,24 @@ export function registerCheck(program: Command): void {
     // No-errors check (opts.errors === false when --no-errors is passed)
     if (opts.errors === false) {
       const scripts = consoleObserver();
+      const signals = createSignalScope();
+      const errors: string[] = [];
       const warnings: string[] = [];
       const warn = (message: string) => { warnings.push(message); console.error(message); };
       try {
         const status = await bridge.eval(scripts.patch);
         if (status !== 'patched') throw new Error(`Observer setup failed: ${String(status)}`);
-        const errors: string[] = [];
-        await monitorFor({ interval: Math.min(500, opts.duration), duration: opts.duration }, async () => {
+        const outcome = await monitorFor({ interval: Math.min(500, opts.duration), duration: opts.duration, signal: signals.signal }, async () => {
           const entries = z.array(ConsoleEntrySchema).parse(await readObserver(bridge, scripts, warn));
           errors.push(...entries.filter(e => e.level === 'error').map(e => e.message));
         });
-        checks.push({ type: 'no-errors', passed: errors.length === 0, errors });
+        checks.push({ type: 'no-errors', passed: errors.length === 0 && outcome === 'completed', errors });
       } catch (err) {
-        checks.push({ type: 'no-errors', passed: false, errors: [], error: err instanceof Error ? err.message : String(err) });
+        checks.push({ type: 'no-errors', passed: false, errors, error: err instanceof Error ? err.message : String(err) });
       } finally {
         await closeObserver(bridge, scripts, warn);
+        signals.dispose();
+        if (signals.signal.aborted) warn(`Observation interrupted by ${String(signals.signal.reason)}; --no-errors did not complete.`);
         if (warnings.length) {
           const check = checks[checks.length - 1]!;
           check.passed = false;

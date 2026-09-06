@@ -290,6 +290,8 @@ Interaction commands dispatch DOM events inside the webview. They require the de
 | `check` | Structured assertions (`--selector`, `--text`, `--eval`, `--no-errors`) — exits 0/1 |
 | `store-inspect` | Inspect reactive store state (Pinia, Vue devtools, custom hooks) |
 
+`check` requires at least one assertion. `--no-errors` observes for `--duration` (default 3000 ms) and fails if interrupted or if collection is incomplete. `capture` records interruptions and missing artifacts as `partial: true` with warnings; available evidence is preserved. `click --wait` polls in the CLI before dispatching once. Conflicting click types and scroll actions are rejected.
+
 `capture`'s pipeline is also callable as a library: `captureToDir(bridge, adapter, opts)` returns the `CaptureManifest`. Deep-import it from `tauri-agent-tools/dist/commands/capture.js` — there is no package-root library entry point (the root is the CLI).
 
 ### Targeting Flags
@@ -317,9 +319,9 @@ tauri-agent-tools diagnose --config ./src-tauri -o ./diagnose-out
 
 See [`docs/troubleshooting/decision-tree.md`](docs/troubleshooting/decision-tree.md) for the full symptom → command flowchart.
 
-## Bridge-extending diagnostics (new in 0.7, requires bridge v0.7.0+)
+## Bridge-extending diagnostics
 
-Four commands that talk to new dev-bridge endpoints. Each feature-detects via `GET /version` and surfaces an actionable upgrade error when the bridge is older than v0.7.0.
+These commands feature-detect via `GET /version` and degrade with a note against older bridges. `process-tree` can use an OS fallback when a PID is available. Use `--strict` to require the richer endpoint and fail with an upgrade error.
 
 ```bash
 # Tauri PID + registered sidecars (--deep walks the full OS descendant tree, no bridge needed)
@@ -337,7 +339,7 @@ tauri-agent-tools webview attach --open
 tauri-agent-tools health --json
 ```
 
-> **Integrators upgrading from v0.6:** Re-copy `examples/tauri-bridge/src/dev_bridge.rs` into your app. `start_bridge` now returns a third tuple element (`SidecarRegistry`); pass it to `spawn_sidecar_monitored` so sidecars show up in `process-tree`/`health`. See `.agents/skills/tauri-bridge-setup/SKILL.md` for the full upgrade walkthrough.
+> **Optional enrichment for integrators upgrading from v0.6:** To enable the richer endpoints, re-copy `examples/tauri-bridge/src/dev_bridge.rs` into your app. `start_bridge` now returns a third tuple element (`SidecarRegistry`); pass it to `spawn_sidecar_monitored` so sidecars show up in `process-tree`/`health`. See `.agents/skills/tauri-bridge-setup/SKILL.md` for the full upgrade walkthrough.
 
 ## Bridge-free diagnostics (new in 0.7)
 
@@ -436,7 +438,7 @@ The crop accounts for window decoration (title bar, borders) by comparing `windo
 Commands such as screenshot, DOM inspection, and storage inspection read app state. `eval` executes arbitrary JavaScript and can modify the app; the bridge does not enforce read-only evaluation. IPC and console monitors, `capture`, and `check --no-errors` temporarily wrap app APIs; mutations installs an observer. Each collector restores its own instrumentation on completion, error, SIGINT, or SIGTERM when the webview is reachable. Interaction commands (click, type, scroll, focus, navigate, select, invoke) use eval-based DOM event dispatch and **only work with the dev bridge** (debug builds). Native input injection (xdotool, Accessibility API) is deliberately avoided:
 
 - **Native input is system-wide and risky.** X11 injection operates globally, not per-window — it can grab the cursor and require a hard reboot.
-- **Eval-based dispatch is per-window and sandboxed.** Interaction commands dispatch DOM events inside the webview via the bridge. They can't affect other apps or the OS.
+- **Eval-based dispatch targets the selected webview.** Application event handlers and invoked Tauri commands still run normally, including any backend work they perform.
 - **Debug-only by design.** The bridge is compiled out of release builds (`cfg!(debug_assertions)`), so interaction commands cannot run against production apps.
 
 ### Why no MCP server mode

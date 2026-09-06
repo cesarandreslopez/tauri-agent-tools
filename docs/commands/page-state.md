@@ -18,6 +18,8 @@ tauri-agent-tools page-state [options]
 | `--json` | Output as JSON | — |
 | `--port <number>` | Bridge port (auto-discover if omitted) | — |
 | `--token <string>` | Bridge token (auto-discover if omitted) | — |
+| `--pid <number>` | Select an app bridge by PID | — |
+| `--window-label <label>` | Select a webview | `main` |
 
 ## Examples
 

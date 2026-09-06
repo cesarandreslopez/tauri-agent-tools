@@ -32,7 +32,7 @@ npm test
 npm run dev
 ```
 
-## Project Structure
+## Project Structure (selected files)
 
 ```
 tauri-agent-tools/
@@ -80,7 +80,7 @@ tauri-agent-tools/
 - **ESM imports** — always use `.js` extensions (NodeNext resolution)
 - **Security first** — use `execFile()` with array args, never `exec()` with shell strings
 - **Window ID validation** — validate with `/^\d+$/` before passing to external tools
-- **Inspection is read-only, interaction is debug-only** — inspection commands never modify app state; interaction commands (click, type, scroll, focus, navigate, select, invoke) act only through JavaScript evaluated in the webview via the dev bridge (debug builds), never native input injection
+- **Evaluation and instrumentation** — DOM/storage/screenshot inspection reads state; `eval` may modify it. Collectors temporarily instrument app APIs and must clean up on errors and termination signals. Interaction uses the debug bridge without native input injection
 
 ## Branch Naming
 
@@ -110,7 +110,7 @@ chore: update dependencies
 1. **Fork** the repository and create your branch from `main`
 2. **Make your changes** — keep PRs focused on a single concern
 3. **Add tests** for new functionality
-4. **Run the test suite** — `npm test` must pass
+4. **Run checks** — `npm run lint` and `npm test` must pass; lint includes bridge parity, import boundaries, TypeScript, and ESLint
 5. **Build successfully** — `npm run build` must complete without errors
 6. **Submit a PR** with a clear description of what changed and why
 
@@ -141,3 +141,19 @@ Tests use vitest with globals enabled — `describe`, `it`, `expect` are availab
 
 - Open a [GitHub Issue](https://github.com/cesarandreslopez/tauri-agent-tools/issues) for bugs or feature requests
 - Check existing issues before creating a new one
+
+## CI and release verification
+
+CI tests Node 20 and 24 on Ubuntu, Node 24 on macOS, and the Rust bridge example on both platforms. ImageMagick is installed in CI and release jobs so real image-comparison tests run. Tests include React forms and generated bridge scripts executed in jsdom, alongside command and platform tests.
+
+```bash
+npm run lint
+npm test
+cargo test --locked --manifest-path examples/tauri-bridge/Cargo.toml
+zensical build
+npm run check:package
+```
+
+Install stable Rust and the platform’s Tauri build prerequisites for the example tests. Its `Cargo.lock` is tracked to make CI reproducible. `examples/.npmignore` excludes Rust build/codegen artifacts; `check:package` checks the package contents and package/lockfile/skill versions after the CLI has been built. Documentation builds require Zensical.
+
+Releases update the npm package and all three skill versions, add a changelog section, and synchronize `docs/changelog.md`. The CLI version is separate from the bridge protocol and example application versions. Push the release commit to `main`, wait for CI and documentation deployment, then push its matching `v<version>` tag. The release workflow validates, publishes npm, and creates the GitHub release from the changelog.

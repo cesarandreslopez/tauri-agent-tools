@@ -1,7 +1,7 @@
 ---
 name: tauri-debug-quickstart
 description: First-30-seconds triage for a broken Tauri desktop app. Pick the right command for the symptom you're seeing, with one-line escalations to deeper skills.
-version: 0.9.2
+version: 0.9.3
 tags: [tauri, debugging, triage, quickstart, decision-tree, logs, process-tree, bundle, forensics, diagnose]
 ---
 
@@ -82,3 +82,5 @@ This guidance assumes the agent is inspecting a Tauri 2 desktop app on macOS or 
 - **The dev bridge requires `cfg!(debug_assertions)`** — release builds strip it, so bridge-dependent commands won't work against signed/notarized release artifacts. Use bridge-free commands (`forensics`, `app-paths`, `os-logs`, `config inspect`, `sidecar tap`) for those.
 
 For deeper how-tos see the [`tauri-agent-tools`](../tauri-agent-tools/SKILL.md) skill. For bridge integration setup (Rust side), see [`tauri-bridge-setup`](../tauri-bridge-setup/SKILL.md).
+
+For bridge-free collection even when a live target exists, pass `diagnose --no-bridge`. `probe --json` identifies the selected PID, port, and window label. Inspect `partial` and warnings in captures/bundles before assuming collection completed; interrupted `check --no-errors` fails. Bundle redaction failures prevent publication, and images require review before sharing.

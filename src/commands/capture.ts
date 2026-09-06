@@ -14,7 +14,7 @@ import type { BridgeClient } from '../bridge/client.js';
 import { consoleObserver, readObserver, closeObserver } from '../bridge/observers.js';
 import { ConsoleEntrySchema } from '../schemas/commands.js';
 import { z } from 'zod';
-import { monitorFor } from '../util/monitor.js';
+import { monitorFor, createSignalScope } from '../util/monitor.js';
 import { readRustLogs } from '../bridge/logReader.js';
 import { evaluateExpression } from '../bridge/evaluate.js';
 
@@ -58,6 +58,10 @@ export async function captureToDir(
   await mkdir(outDir, { recursive: true });
 
   const scripts = consoleObserver();
+  const signals = createSignalScope();
+  const assertCollecting = (): void => {
+    if (signals.signal.aborted) throw new Error(`Capture interrupted by ${String(signals.signal.reason)}`);
+  };
   let observerError: unknown;
   let closed = false;
   const warnings: string[] = [];
@@ -76,6 +80,7 @@ export async function captureToDir(
     let capturedTitle: string | undefined;
     let capturedViewport: { width: number; height: number } | undefined;
     try {
+      assertCollecting();
       const raw = await bridge.eval(PAGE_STATE_SCRIPT);
       const parsed = PageStateSchema.parse(JSON.parse(String(raw)));
       capturedUrl = parsed.url;
@@ -90,6 +95,7 @@ export async function captureToDir(
 
     // 4. Screenshot — missing platform tools must not prevent other artifacts.
     try {
+      assertCollecting();
       const screenshotAdapter = typeof adapter === 'function' ? await adapter(opts.selector ? 'image' : 'capture') : adapter;
       const windowId = await resolveWindowId(screenshotAdapter, bridge, opts);
       let buffer: Buffer;
@@ -116,6 +122,7 @@ export async function captureToDir(
 
     // 5. DOM tree — save to dom.json
     try {
+      assertCollecting();
       const raw = await bridge.eval(buildSerializerScript('body', opts.domDepth, false));
       const parsed = DomNodeSchema.parse(JSON.parse(String(raw)));
       const path = join(outDir, 'dom.json');
@@ -127,6 +134,7 @@ export async function captureToDir(
 
     // 6. Storage — save to storage.json
     try {
+      assertCollecting();
       const raw = await bridge.eval(STORAGE_SCRIPT);
       const parsed = SnapshotStorageResultSchema.parse(JSON.parse(String(raw)));
       const path = join(outDir, 'storage.json');
@@ -140,7 +148,7 @@ export async function captureToDir(
     try {
       if (observerError) throw observerError;
       const errors: Array<{ ts: number; msg: string }> = [];
-      await monitorFor({ interval: Math.min(500, opts.logsDuration), duration: opts.logsDuration }, async () => {
+      await monitorFor({ interval: Math.min(500, opts.logsDuration), duration: opts.logsDuration, signal: signals.signal }, async () => {
         const entries = z.array(ConsoleEntrySchema).parse(await readObserver(bridge, scripts, warn));
         errors.push(...entries.filter(e => e.level === 'error').map(e => ({ ts: e.timestamp, msg: e.message })));
       });
@@ -153,6 +161,7 @@ export async function captureToDir(
 
     // 8. Fetch rust logs — save to rust-logs.json
     try {
+      assertCollecting();
       const logs = await readRustLogs(bridge, undefined, { warn });
       const path = join(outDir, 'rust-logs.json');
       await writeFile(path, JSON.stringify(logs, null, 2));
@@ -164,6 +173,7 @@ export async function captureToDir(
     // 9. Optional custom eval — save to eval.json
     if (opts.eval) {
       try {
+        assertCollecting();
         const { value: raw } = await evaluateExpression(bridge, opts.eval);
         const parsed = typeof raw === 'string'
           ? (() => { try { return JSON.parse(raw); } catch { return raw; } })()
@@ -179,6 +189,8 @@ export async function captureToDir(
     // 10. Write manifest.json
     await closeObserver(bridge, scripts, warn);
     closed = true;
+    signals.dispose();
+    if (signals.signal.aborted) warn(`warning: capture interrupted by ${String(signals.signal.reason)}; collection is incomplete`);
     const errorCount = Object.values(files).filter(v => v.startsWith('error: ')).length;
     const manifest = {
       timestamp: new Date().toISOString(),
@@ -196,6 +208,7 @@ export async function captureToDir(
     return manifest;
   } finally {
     if (!closed) await closeObserver(bridge, scripts, warn);
+    signals.dispose();
   }
 }
 

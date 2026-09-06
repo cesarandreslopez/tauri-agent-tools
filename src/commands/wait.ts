@@ -3,7 +3,7 @@ import type { AdapterFactory } from '../types.js';
 import { addBridgeOptions, resolveBridge, parsePositiveInt, type BridgeOpts } from './shared.js';
 import { evaluateExpression } from '../bridge/evaluate.js';
 import { pollUntil } from '../util/poll.js';
-import { CliError } from '../util/errors.js';
+import { CliError } from '../errors.js';
 
 export function registerWait(
   program: Command,

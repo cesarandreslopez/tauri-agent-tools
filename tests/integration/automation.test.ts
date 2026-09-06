@@ -26,6 +26,12 @@ function setup() {
 }
 
 describe('automation through the shipped bridge callback', () => {
+  it.each(['value', 'kind', 'encoded'])('evaluates the app global %s without shadowing it', async name => {
+    const { run, output } = setup();
+    fixture.window[name] = `app ${name}`;
+    await run(['eval', name, '--json']);
+    expect(JSON.parse(String(output.mock.calls[0][0]))).toEqual({ result: `app ${name}` });
+  });
   it('waits successfully for an existing selector', async () => {
     const {run, output} = setup();
     await run(['wait', '--selector', '#existing', '--timeout', '100', '--json']);

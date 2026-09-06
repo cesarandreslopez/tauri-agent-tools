@@ -128,7 +128,7 @@ Token files are written to the system temp directory (`/tmp/` on Linux/macOS):
 - **Token auth** — prevents unauthorized access from other local processes
 - **Debug only** — wrapped in `cfg!(debug_assertions)`, compiled out of release builds
 - **Cleanup** — token file deleted on exit via `scopeguard`
-- **Inspection is read-only** — inspection commands only evaluate JS, never inject input events
+- **Eval is unrestricted** — `/eval` runs arbitrary JavaScript and can modify app state; collectors temporarily instrument app APIs
 - **Interaction is debug-only** — interaction commands use eval-based DOM dispatch, sandboxed to the webview
 
 ## Log Capture Endpoint
@@ -274,3 +274,9 @@ POST http://127.0.0.1:{port}/describe
 | 5xx | Bridge error | Throw error with status and body |
 | Timeout | No response within 5s | `AbortSignal.timeout(5000)` throws |
 | Connection refused | Bridge not running | Throw connection error |
+
+## CLI evaluation and collector behavior
+
+CLI v0.9.3 keeps bridge protocol v0.8.0 unchanged. The CLI evaluation helper wraps an awaited global evaluation in a JSON-text envelope so legacy stringifying bridges preserve typed results, exceptions, and original JavaScript truthiness. `eval --json` exposes `{ "result": value }`; fatal CLI errors are separate stderr envelopes.
+
+Console/IPC collectors share instrumentation but maintain independent bounded subscriber buffers. Mutation observers are independent per selector/session. They take a final sample and clean up their own subscription when they stop. Signal handling spans setup through cleanup; loss of the webview or a force-killed CLI can prevent restoration.

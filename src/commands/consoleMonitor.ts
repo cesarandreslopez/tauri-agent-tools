@@ -1,6 +1,6 @@
 import { Command } from 'commander';
 import { consoleObserver, readObserver, closeObserver } from '../bridge/observers.js';
-import { monitorFor } from '../util/monitor.js';
+import { monitorFor, createSignalScope } from '../util/monitor.js';
 import { z } from 'zod';
 import { addBridgeOptions, resolveBridge, parseEnum, parsePositiveInt } from './shared.js';
 import { ConsoleEntrySchema, ConsoleLevelSchema } from '../schemas/commands.js';
@@ -52,6 +52,7 @@ export function registerConsoleMonitor(program: Command): void {
 
     const bridge = await resolveBridge(opts);
     const scripts = consoleObserver();
+    const signals = createSignalScope();
     try {
       const patchResult = await bridge.eval(scripts.patch);
       if (patchResult !== 'patched' && patchResult !== 'already_patched') throw new Error(`Observer setup failed: ${String(patchResult)}`);
@@ -60,7 +61,7 @@ export function registerConsoleMonitor(program: Command): void {
         console.error('Monitoring console output... (Ctrl+C to stop)');
       }
 
-      await monitorFor(opts, async () => {
+      await monitorFor({ ...opts, signal: signals.signal }, async () => {
         const entries = z.array(ConsoleEntrySchema).parse(await readObserver(bridge, scripts));
 
         for (const entry of entries) {
@@ -76,6 +77,7 @@ export function registerConsoleMonitor(program: Command): void {
       });
     } finally {
       await closeObserver(bridge, scripts);
+      signals.dispose();
     }
   });
 

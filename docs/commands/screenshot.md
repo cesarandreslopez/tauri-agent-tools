@@ -16,7 +16,7 @@ tauri-agent-tools screenshot [options]
 | Option | Description | Default |
 |--------|-------------|---------|
 | `-s, --selector <css>` | CSS selector — screenshot just this element (requires bridge) | — |
-| `-t, --title <regex>` | Window title to match — regex; quote titles with spaces (auto-discovered from bridge if omitted) | — |
+| `-t, --title <pattern>` | Window title (X11: regex; macOS/Wayland: substring); quote titles with spaces (auto-discovered from bridge if omitted) | — |
 | `-w, --window-id <id>` | Platform window id (from `list-windows`) — overrides `--title` | — |
 | `-o, --output <path>` | Output file path | `screenshot-<timestamp>.png` |
 | `--format <png\|jpg>` | Output format | `png` |
@@ -24,6 +24,8 @@ tauri-agent-tools screenshot [options]
 | `--json` | Output structured JSON metadata | — |
 | `--port <number>` | Bridge port (auto-discover if omitted) | — |
 | `--token <string>` | Bridge token (auto-discover if omitted) | — |
+| `--pid <number>` | Select an app bridge by PID | — |
+| `--window-label <label>` | Select a webview | `main` |
 
 ## Examples
 
@@ -93,6 +95,8 @@ When only `--title` or `--window-id` is used, the full window is captured direct
 
 - Use `dom --depth 2` first to find the right CSS selector
 - The `--max-width` flag is useful for keeping screenshots manageable for AI agents
-- Without `--title` or `--window-id`, the tool auto-discovers the window title from the bridge via `document.title`
+- With `--selector` and no `--title` or `--window-id`, the tool auto-discovers the title from the bridge via `document.title`
 - Window id format is platform-specific (X11/macOS/Sway numeric, Hyprland hex `0x…`) — always take it from `list-windows` output
 - `--window-id` (platform/OS window) is unrelated to `--window-label` (Tauri webview label, a bridge concept)
+
+Choose `--selector`, `--title`, or `--window-id`. Title auto-discovery is available with `--selector`. `--max-width` must be a positive integer. Full-window PNG capture on macOS and Wayland uses native tools without ImageMagick; selector crops, resizing, JPEG output, and X11 capture require ImageMagick.

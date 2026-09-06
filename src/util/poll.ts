@@ -1,4 +1,4 @@
-import { CliError } from './errors.js';
+import { CliError } from '../errors.js';
 
 /** Each request and sleep consumes the same overall time budget. */
 export async function pollUntil<T>(

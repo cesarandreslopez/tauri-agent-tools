@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-**tauri-agent-tools** — A TypeScript CLI tool for agent-driven inspection and interaction with Tauri desktop applications. Captures real platform pixels of DOM elements by combining `getBoundingClientRect` positions with native screenshot tools (not canvas renders). Inspection commands are read-only. Interaction commands (click, type, scroll, etc.) are debug-only.
+**tauri-agent-tools** — A TypeScript CLI tool for agent-driven inspection and interaction with Tauri desktop applications. Captures real platform pixels of DOM elements by combining `getBoundingClientRect` positions with native screenshot tools (not canvas renders). DOM/storage/screenshot inspection reads state; evaluation can modify it and monitors install temporary instrumentation. Interaction commands (click, type, scroll, etc.) are debug-only.
 
 ## Commands
 
@@ -44,7 +44,10 @@ npx vitest run tests/commands/screenshot.test.ts
 | `src/util/redactText.ts` | `redactText()`, `redactJson()`, `redactDir()`, `scanResidualSecrets()` — secrets/PII redaction for shared artifacts (`bundle`) |
 | `src/util/mergeByTimestamp.ts` | `mergeByTimestamp()` — stable merge of timestamped streams into one UTC-ordered timeline |
 | `src/util/psTree.ts` | `snapshotProcesses()`, `buildDescendantTree()` — OS process-tree walk for `process-tree --deep` / `bundle` |
-| `examples/tauri-bridge/src/dev_bridge.rs` | Reference Rust bridge (~1200 lines) — not part of build |
+| `examples/tauri-bridge/src/dev_bridge.rs` | Reference Rust bridge — compiled and tested in CI |
+| `src/errors.ts` | Dependency-free CLI error codes, messages, and hints |
+| `src/bridge/evaluate.ts` / `observers.ts` / `logReader.ts` | Typed global evaluation, independent collector sessions, and Rust log cursors |
+| `src/util/monitor.ts` | Collector-lifetime signal scopes and final-sample polling |
 
 ## Architecture
 
@@ -58,19 +61,19 @@ npx vitest run tests/commands/screenshot.test.ts
 
 **Platform adapter pattern:** `src/platform/` has four adapters (X11, Wayland/Sway, Hyprland, macOS) implementing a common interface (`findWindow`, `captureWindow`, `getWindowGeometry`, `getWindowName`, `listWindows`). Detection logic in `src/platform/detect.ts` selects the adapter at runtime.
 
-**ImageMagick version detection:** `src/util/magick.ts` detects ImageMagick v6 (standalone `convert`, `import`, etc.) vs v7 (unified `magick` binary) at startup. The `magickCommand()` function returns the correct binary and args for each subcommand. Result is cached after first detection.
+**ImageMagick version detection:** `src/util/magick.ts` detects ImageMagick v6 (standalone `convert`, `import`, etc.) vs v7 (unified `magick` binary) when needed. The `magickCommand()` function returns the correct binary and args for each subcommand. Result is cached after first detection.
 
 **Bridge client:** `src/bridge/client.ts` communicates with a Rust dev bridge running inside the Tauri app via HTTP POST to a localhost `/eval` endpoint with token auth. Token auto-discovered from `/tmp/tauri-dev-bridge-*.token` files (see `src/bridge/tokenDiscovery.ts`).
 
 **Crop computation:** Screenshot commands combine window geometry from the platform adapter with element rect from the bridge to compute crop regions, accounting for window decorations (title bar, borders).
 
-**Rust bridge example:** `examples/tauri-bridge/src/dev_bridge.rs` (~1200 lines) shows the Tauri-side HTTP server. Not part of the build — it's reference code for users integrating into their own Tauri apps.
+**Rust bridge example:** `examples/tauri-bridge/src/dev_bridge.rs` is the Tauri-side HTTP server copied by integrators. CI compiles and tests the example on Ubuntu and macOS with its tracked lockfile. It is separate from the TypeScript build.
 
 ## Key Constraints
 
 - **Security:** Uses `execFile()` with array args everywhere — never `exec()` with shell strings. Window IDs validated with `/^\d+$/` before use.
 - **Interaction commands are debug-only:** Click, type, scroll, focus, navigate, select, and invoke only work with the dev bridge (debug builds). They use eval-based DOM event dispatch.
-- **Inspection commands are read-only:** No state modification from inspection commands. This is a deliberate design choice.
+- **Evaluation is unrestricted:** `eval` can modify app state. Collectors install temporary instrumentation; register signal handlers before setup, take a final sample, and clean up through a `finally` block. Interrupted assertions fail and captures report partial evidence.
 - **Node >=20 required:** Uses native `fetch()` (no HTTP library dependency).
 - **TypeScript strict mode** with `noUncheckedIndexedAccess`, `noImplicitReturns`, `noFallthroughCasesInSwitch` enabled. Declarations generated to `dist/`.
 - **Tests use vitest globals:** `describe`, `it`, `expect` available without imports.
@@ -81,7 +84,7 @@ npx vitest run tests/commands/screenshot.test.ts
 - **Process execution:** Always use `execFile()` with array args (via `src/util/exec.ts`). Never use `exec()` with shell strings — prevents command injection.
 - **Window ID validation:** All window IDs must match `/^\d+$/` before being passed to external tools. See `validateWindowId()` in `src/util/exec.ts`.
 - **Vitest globals:** Tests use `describe`, `it`, `expect` without imports (configured in `vitest.config.ts`).
-- **jsdom fixture:** `tests/integration/react-controlled-forms.test.ts` is the only jsdom-environment test (per-file `// @vitest-environment jsdom`, real React via `react-dom`); every other test file runs in node.
+- **jsdom fixtures:** React controlled-form tests use the jsdom test environment. Other integration tests create isolated jsdom webviews through `tests/helpers/webview.ts` and execute the callback generated from the shipped Rust bridge.
 - **Commit messages:** Follow [Conventional Commits](https://www.conventionalcommits.org/) — `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`.
 - **Branch naming:** `feature/<name>`, `fix/<name>`, `docs/<name>`, `refactor/<name>`.
 
@@ -92,8 +95,8 @@ Publishing is automated by `.github/workflows/release.yml`, which fires on a pus
 1. Update the version in `package.json`, and keep `package-lock.json` in sync (`npm install --package-lock-only`). The skill `version:` fields in `.agents/skills/*/SKILL.md` should match too.
 2. Update `CHANGELOG.md` with a new `## [<version>] - <date>` section — the release workflow extracts this section verbatim as the GitHub Release body. `docs/changelog.md` is a manual mirror of `CHANGELOG.md` — re-sync it with the new release section in the same release commit.
 3. Commit on `main` (e.g. `chore: release v<version>`).
-4. `git push origin main`, then `git tag v<version>` and `git push origin v<version>`. The tag must point at a commit that is on `main` (the workflow rejects it otherwise).
-5. `release.yml` validates that the tag matches `package.json`, runs lint + build + tests, then `npm publish` (skips if already published) and creates the GitHub Release. **Do not run `npm publish` by hand.**
+4. `git push origin main`, wait for CI and documentation deployment to succeed on that commit, then `git tag v<version>` and `git push origin v<version>`. The tag must point at a commit that is on `main` (the workflow rejects it otherwise).
+5. `release.yml` validates that the tag matches `package.json`, runs lint + build + tests + package/version checks, then `npm publish` (skips if already published) and creates the GitHub Release. **Do not run `npm publish` by hand.**
 
 ## Module Dependency DAG
 
@@ -110,7 +113,7 @@ cli.ts ────────────────────────�
                            types.ts ◄── schemas/
 ```
 
-Dependencies flow strictly downward. Enforced by `scripts/check-imports.mjs`.
+Dependencies flow strictly downward. `errors.ts` is an additional dependency-free leaf used by CLI, commands, bridge, and utilities. Enforced by `scripts/check-imports.mjs`, included in `npm run lint`.
 
 ### Import Conventions
 
@@ -122,7 +125,10 @@ Dependencies flow strictly downward. Enforced by `scripts/check-imports.mjs`.
 
 ```bash
 npx tsc --noEmit                              # Type check
-npm test                                      # All tests (870+ tests, 67 files)
+npm test                                      # All CLI and integration tests
+npm run check:package                         # Package files + package/lockfile/skill versions
+cargo test --locked --manifest-path examples/tauri-bridge/Cargo.toml
+zensical build                                # Documentation site
 node scripts/check-imports.mjs                # Import DAG linter
 node scripts/check-bridge-parity.mjs          # Bridge endpoint/min-version parity (also part of npm run lint)
 npx madge --circular --extensions ts,tsx src/  # Circular dependency check
@@ -131,3 +137,5 @@ npx madge --circular --extensions ts,tsx src/  # Circular dependency check
 ## Agent Skills
 
 `.agents/skills/` contains three Agent Skills (agentskills.io format): `tauri-agent-tools` (using the CLI), `tauri-bridge-setup` (adding the Rust bridge), and `tauri-debug-quickstart` (first-30-seconds triage / decision tree). These are shipped in the npm package.
+
+The npm CLI and skill versions advance together. `BRIDGE_VERSION` tracks protocol compatibility independently; the example application has its own Cargo/Tauri version. Keep historical release/design versions intact. The example lockfile is tracked, while `examples/.npmignore` excludes `target` and `gen` outputs from npm.

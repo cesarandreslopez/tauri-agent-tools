@@ -22,6 +22,8 @@ tauri-agent-tools console-monitor [options]
 | `--json` | Output one JSON object per line | — |
 | `--port <number>` | Bridge port (auto-discover if omitted) | — |
 | `--token <string>` | Bridge token (auto-discover if omitted) | — |
+| `--pid <number>` | Select an app bridge by PID | — |
+| `--window-label <label>` | Select a webview | `main` |
 
 ## Examples
 
@@ -77,5 +79,9 @@ tauri-agent-tools console-monitor --json --duration 5000
 ## Notes
 
 - Original console methods still execute — the patch is transparent
-- Object arguments are serialized via `JSON.stringify`
+- Object arguments are serialized with bounded traversal; circular references and BigInts are safe, and getters/custom `toJSON` methods are not invoked
 - Cleanup happens automatically on SIGINT/SIGTERM or when `--duration` expires
+
+Each invocation has an independent session with a 1,000-entry buffer. Overflow is reported on stderr. The collector takes a final sample even when `--duration` is shorter than `--interval`, and removes its own instrumentation on completion, failure, SIGINT, or SIGTERM while the webview remains reachable. Force-killing the CLI or losing the webview can prevent cleanup. Intervals and durations must be positive whole milliseconds.
+
+Use `--duration` in automation. With `--json`, entries are NDJSON on stdout; warnings and fatal errors go to stderr.

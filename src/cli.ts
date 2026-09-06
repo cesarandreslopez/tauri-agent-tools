@@ -10,7 +10,7 @@ import { X11Adapter } from './platform/x11.js';
 import { WaylandAdapter } from './platform/wayland.js';
 import { HyprlandAdapter } from './platform/hyprland.js';
 import { MacOSAdapter } from './platform/macos.js';
-import { errorDetail } from './util/errors.js';
+import { errorDetail } from './errors.js';
 import { registerScreenshot } from './commands/screenshot.js';
 import { registerInfo } from './commands/info.js';
 import { registerDom } from './commands/dom.js';

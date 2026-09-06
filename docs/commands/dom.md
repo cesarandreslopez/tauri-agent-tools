@@ -27,6 +27,8 @@ tauri-agent-tools dom [selector] [options]
 | `--json` | Full structured JSON output | — |
 | `--port <number>` | Bridge port (auto-discover if omitted) | — |
 | `--token <string>` | Bridge token (auto-discover if omitted) | — |
+| `--pid <number>` | Select an app bridge by PID | — |
+| `--window-label <label>` | Select a webview | `main` |
 
 ## Examples
 
@@ -122,3 +124,5 @@ tauri-agent-tools dom ".header" --json
 **Accessibility mode** (`--mode accessibility`): shows ARIA roles, accessible names, and states (disabled, checked, expanded, selected, required, current, level).
 
 **JSON** (`--json`): full structured output with all attributes, dimensions, and optional computed styles.
+
+`--depth` must be a non-negative integer; zero inspects only the selected root. Malformed numeric arguments fail before contacting the app.

@@ -31,6 +31,54 @@ const noScreenshot = () => { throw new Error('Missing screenshot dependency'); }
 const options = () => ({ output: dir, windowId: '123', domDepth: 2, logsDuration: 0 });
 
 describe('collector lifecycle', () => {
+  it.each(['SIGINT', 'SIGTERM'])('fails an incomplete no-errors assertion on %s, including during setup', async signal => {
+    const baseline = process.listenerCount(signal);
+    const original = fixture.window.console.error;
+    const output = vi.spyOn(console, 'log').mockImplementation(() => {});
+    vi.stubGlobal('fetch', vi.fn(async (_url, opts) => {
+      const script = JSON.parse(opts.body).js;
+      const result = await fixture.bridge.eval(script);
+      if (script.includes("return 'patched'")) process.emit(signal);
+      return new Response(JSON.stringify({ result }));
+    }));
+    const program = new Command().exitOverride(); registerCheck(program);
+    await program.parseAsync(['node', 'fixture', 'check', '--no-errors', '--duration', '30000',
+      '--port', '9999', '--token', 'fixture', '--json']);
+    expect(JSON.parse(String(output.mock.calls[0][0]))).toMatchObject({
+      passed: false, checks: [{ passed: false, errors: [], error: expect.stringContaining(signal) }],
+    });
+    expect(process.exitCode).toBe(1);
+    expect(fixture.window.console.error).toBe(original);
+    expect(process.listenerCount(signal)).toBe(baseline);
+  });
+  it.each(['setup', 'page-state', 'poll', 'cleanup'])('finalizes interrupted capture during %s', async phase => {
+    const baseline = process.listenerCount('SIGTERM');
+    const original = fixture.window.console.error;
+    let interrupted = false;
+    client.eval = vi.fn(async script => {
+      const result = await fixture.bridge.eval(script);
+      const trigger = phase === 'setup' ? "return 'patched'"
+        : phase === 'page-state' ? 'window.location.href'
+        : phase === 'cleanup' ? "return 'cleaned'" : 'session.entries.splice(0)';
+      if (!interrupted && script.includes(trigger)) {
+        interrupted = true;
+        process.emit('SIGTERM');
+      }
+      return result;
+    });
+    const manifest = await captureToDir(client, noScreenshot, { ...options(), logsDuration: 5 });
+    expect(interrupted).toBe(true);
+    expect(manifest.partial).toBe(true);
+    expect(manifest.warnings).toContainEqual(expect.stringContaining('interrupted by SIGTERM'));
+    expect(manifest.files['console-errors.json']).toBe(join(dir, 'console-errors.json'));
+    expect(JSON.parse(await readFile(join(dir, 'manifest.json'), 'utf8'))).toMatchObject({ partial: true, warnings: manifest.warnings });
+    expect(fixture.window.console.error).toBe(original);
+    expect(process.listenerCount('SIGTERM')).toBe(baseline);
+    if (phase === 'setup' || phase === 'page-state') {
+      expect(manifest.files['screenshot.png']).toContain('Capture interrupted');
+      expect(client.fetchLogs).not.toHaveBeenCalled();
+    }
+  });
   it('preserves other capture artifacts and restores console when screenshot tools are missing', async () => {
     const original = fixture.window.console.error;
     const manifest = await captureToDir(client, noScreenshot, options());

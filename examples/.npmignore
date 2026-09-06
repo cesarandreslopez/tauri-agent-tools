@@ -1,0 +1,3 @@
+# Example build outputs must never enter the published npm package.
+**/target/
+**/gen/

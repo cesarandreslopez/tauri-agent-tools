@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.3] - 2026-09-06
+
+More reliable CLI automation, independent log collectors, and safer incident bundles. This release includes the changes since v0.9.2 plus fixes found during release review. Existing commands are retained; malformed numeric arguments and conflicting options now fail explicitly. The bridge protocol remains v0.8.0, and no bridge update is required for these CLI fixes.
+
+### Fixed
+
+- **Reliable evaluation and condition checks.** `eval`, `wait`, and `check` await promises and preserve JavaScript truthiness before the bridge serializes values. `false`, `0`, `null`, and `undefined` no longer look truthy just because they arrived as strings; the string `"false"` remains truthy. Thrown expressions fail, literal `ERROR:` strings remain ordinary results, and escaped selectors survive transport. Evaluation runs in the webview’s global context without shadowing app globals named `value`, `kind`, or `encoded`.
+- **Bounded waiting and one-time clicks.** Poll requests and sleeps share the same overall timeout budget. `click --wait` polls from the CLI before dispatching one click instead of leaving a delayed click running inside the webview after a request times out.
+- **Collector cleanup and interruption reporting.** Signal handling spans observer setup through cleanup. Console, IPC, and mutation monitors take a final sample even when the duration is shorter than the polling interval. Interrupted `check --no-errors` assertions fail instead of reporting success after observing only part of the requested duration; interrupted captures preserve available evidence and record warnings and `partial: true`. Lost setup replies, collection failures, and cleanup errors are handled explicitly.
+- **Independent monitoring sessions.** Concurrent console, IPC, and mutation collectors no longer drain or restore each other’s sessions. Buffers are limited to 1,000 entries with overflow warnings. Serialization handles circular references and BigInts, bounds large payloads, and avoids invoking object getters. IPC instrumentation excludes internal bridge callbacks and preserves application results and exceptions, including calls settling after a collector closes.
+- **Image comparison errors.** `diff` checks both image dimensions, accepts ImageMagick’s scientific-notation metrics, and treats only comparison exit code 1 as a valid difference. Missing tools, malformed images, dimension mismatches, and unwritable diff outputs fail instead of becoming misleading pixel counts. X11 window searches distinguish no matches from actual tool/display errors.
+- **Configuration and offline diagnostics.** Config and capability loading uses JSON5 instead of stripping comments with regex, preserving URLs and comment-like text inside strings. `diagnose --no-bridge` now skips bridge enrichment even with an explicit target.
+
+### Added
+
+- **`eval --json`** returns `{ "result": value }`. Fatal errors for JSON-enabled invocations use `{ "error": { "code", "message", "hint" } }` on stderr with a nonzero exit status; command results remain on stdout. Failed assertions and diff thresholds retain their structured stdout results.
+- **Selected-target details in `probe`.** JSON output includes the target PID, port, and window label, with a note when automatic discovery chooses among multiple bridges.
+- **Capture completeness metadata.** Capture manifests include optional `partial` and `warnings` fields. Missing screenshot tools no longer prevent collection of DOM, state, storage, and logs.
+- **Release checks.** Package validation checks package/lockfile/skill version agreement, required shipped files, and exclusion of Rust build outputs. Import-boundary validation is now part of lint.
+
+### Changed
+
+- `logs`, `rust-logs`, and `capture` use independent non-draining cursors on bridge v0.8+, replaying the retained backlog and reporting dropped entries. Older bridges emit a warning and fall back to destructive drain reads. `logs --follow` requires a bridge and rejects `--no-bridge`.
+- **Bundles stage privately before publication.** Text, structured storage credentials, and summaries are redacted and checked for remaining secrets before the new directory or archive is published. Redaction failure prevents publication. Archives contain only artifacts from the current run, unrelated existing output files are preserved, and artifact symlinks are rejected. Missing sources mark phases incomplete; archive failure preserves sanitized directory evidence and reports `archive: null`. Images remain unredacted and are listed as warnings for review.
+- Platform dependencies are checked per operation. Window listing, info, and title waits do not require ImageMagick. Full-window PNG capture on macOS/Wayland uses native tools; crop/resize/JPEG/diff and X11 capture require ImageMagick. Title matching is documented as regex on X11 and substring matching on macOS/Sway/Hyprland.
+- Integer, port, and percentage options receive stricter validation. `wait` requires exactly one condition, `check` requires an assertion, and conflicting evaluation sources, click types, scroll actions, and replay destinations are rejected. Sidecar replay examples quote the complete `--to-exec` value and document its whitespace-splitting limitation.
+- CI now covers Node 20/24 on Ubuntu, Node 24 on macOS, and locked Rust bridge builds/tests on both platforms. The example’s Cargo lockfile is tracked; local Rust `target` and generated `gen` directories are excluded from npm. CI and release jobs install ImageMagick for real image-comparison tests.
+- Updated READMEs, command references, architecture, troubleshooting, contributor/security guidance, and all three shipped skills. The documentation changelog mirrors this file; older design documents are marked as historical.
+
 ## [0.9.2] - 2026-08-24
 
 `type` and `select` now reach framework-controlled inputs and verify their writes. Additive and backwards-compatible — no flag changed meaning, all result-schema additions are optional-only, and no bridge change is required.
@@ -106,9 +135,9 @@ Real-world observability hardening. Everything in this release is **additive and
 
 ### Added — Agent UX (Tier 3)
 
-- **`diagnose`** — best-effort super-command. Composes `forensics` (Tier 1) with live bridge data (Tier 2) into one bundle. Always runs the forensics half; layers `/process`, `/capabilities`, `/devtools`, `/health` on top when a bridge is reachable. Output: `<out-dir>/{summary.md, summary.json, bridge.json, forensics/...}`. Use `--no-bridge` to skip the bridge phase entirely.
-- **New agent skill: `tauri-debug-quickstart`** — first-30-seconds triage skill with symptom → command table, decision flowchart, and "when this skill is wrong" caveats.
-- **MkDocs troubleshooting page** — `docs/troubleshooting/decision-tree.md` with a mermaid flowchart mirroring the skill's symptom-table for human readers.
+- **`diagnose`** — best-effort super-command. Composes `forensics` (Tier 1) with live bridge data (Tier 2) into one bundle. Always runs the forensics half; layers `/process`, `/capabilities`, `/devtools`, `/health` on top when a bridge is reachable. Each bridge endpoint is best-effort with per-endpoint error recording — partial bridge availability still produces a useful bundle. Output: `<out-dir>/{summary.md, summary.json, bridge.json, forensics/...}`. Use `--no-bridge` to skip the bridge phase entirely.
+- **New agent skill: `tauri-debug-quickstart`** — first-30-seconds triage skill (`.agents/skills/tauri-debug-quickstart/SKILL.md`). Symptom → command table, decision flowchart, and an explicit "when this skill is wrong" section calling out Tauri 1, Windows, and release-build caveats.
+- **MkDocs troubleshooting page** — `docs/troubleshooting/decision-tree.md` with a mermaid flowchart mirroring the skill's symptom-table for human readers. Wired into `mkdocs.yml` nav.
 
 ### Added — Bridge-extending diagnostics (Tier 2)
 
@@ -118,16 +147,6 @@ Four CLI commands that talk to new dev-bridge endpoints. Each calls `GET /versio
 - **`capabilities audit`** — Devtron-style live audit of declared Tauri capabilities, surfacing wildcard `"*"`, over-broad `fs:allow-all`/`shell:allow-*`/`http:allow-all`, and window labels referenced but not registered.
 - **`webview attach`** — print the webview inspector URL (`webview2` / `webkitgtk`) or platform hint (`wkwebview` — Safari activation). `--print-url` for scripting, `--open` to launch the default browser.
 - **`health`** — uptime + webview readiness + per-sidecar liveness. Exits non-zero when the app is unhealthy so this can drive CI gates.
-
-### Added — Bridge-free diagnostics (Tier 1)
-
-The toolkit can now diagnose Tauri apps without needing a live debug bridge — covering release builds, dead processes, and sidecar protocols.
-
-- **`app-paths`** — resolve a Tauri 2 app's OS data/log/cache/config directories from `tauri.conf.json` (or a bare `--identifier`). Encodes Tauri 2's `PathResolver` semantics for all three platforms; `--exists` flag annotates which paths are present on disk.
-- **`config inspect`** — emit a structured snapshot of `tauri.conf.json` plus a Devtron-style capability matrix. Cross-checks capability permissions against `Cargo.toml`'s plugin declarations and flags wildcard / over-broad scopes (`*`, `fs:allow-all`, `shell:allow-spawn`, …).
-- **`os-logs`** — tail the host OS's log stream filtered to a Tauri bundle id. macOS uses `log stream` with a `subsystem == "<id>"` predicate; Linux uses `journalctl --user -t <productName>`. Output is one normalized NDJSON envelope per line. Windows is stubbed for v0.7.
-- **`sidecar tap`** / **`sidecar replay`** — wrap-and-run a sidecar binary, frame its stdout as NDJSON, validate each envelope against an optional JSON Schema (`--schema <path>`, powered by Ajv), and record the raw stream to a file with `--record`. `sidecar replay` reads the recording back to stdout or pipes it into a fresh process via `--to-exec`, optionally rate-limited with `--rate <lps>`.
-- **`forensics`** — one-shot bundle for post-crash analysis. Resolves the project, lists files in `appDataDir`/`appLogDir`, tails the most-recent log for panic markers, pulls macOS `DiagnosticReports` filtered by `productName`, captures a brief live OS-log tail, and writes `summary.md` + `summary.json` + supporting artifacts. Zero bridge calls — works on a dead app.
 
 ### Changed — Rust dev bridge (BREAKING for integrators)
 
@@ -142,8 +161,33 @@ The toolkit can now diagnose Tauri apps without needing a live debug bridge — 
 
 ### Internal
 
-- New deps: `ajv` ^8, `ajv-formats` ^3 (NDJSON envelope schema validation).
-- Command count: 25 → 36. Test count: 623 → 710.
+- `src/bridge/client.ts` — new `requireEndpoint()` helper caches `/version` per `BridgeClient` instance, translating missing endpoints into actionable upgrade errors.
+- `src/schemas/bridge.ts` — added `ProcessResponseSchema`, `CapabilitiesResponseSchema`, `DevtoolsResponseSchema`, `HealthResponseSchema`.
+- `examples/tauri-bridge/` — added minimal `tauri.conf.json`, `build.rs`, placeholder icon, and a `frontend-stub/index.html` so the example crate actually compiles for the first time (it never did).
+- Test count: 696 → 710 (added 7 BridgeClient v0.7 tests + 7 command e2e tests).
+
+### Added — Bridge-free diagnostics (Tier 1 of "expand beyond the bridge")
+
+The toolkit can now diagnose Tauri apps without needing a live debug bridge — covering release builds, dead processes, and sidecar protocols.
+
+- **`app-paths`** — resolve a Tauri 2 app's OS data/log/cache/config directories from `tauri.conf.json` (or a bare `--identifier`). Encodes Tauri 2's `PathResolver` semantics for all three platforms; `--exists` flag annotates which paths are present on disk.
+- **`config inspect`** — emit a structured snapshot of `tauri.conf.json` plus a Devtron-style capability matrix. Cross-checks capability permissions against `Cargo.toml`'s plugin declarations and flags wildcard / over-broad scopes (`*`, `fs:allow-all`, `shell:allow-spawn`, …).
+- **`os-logs`** — tail the host OS's log stream filtered to a Tauri bundle id. macOS uses `log stream` with a `subsystem == "<id>"` predicate; Linux uses `journalctl --user -t <productName>`. Output is one normalized NDJSON envelope per line (`{ ts, level, source, subsystem, message, raw }`). Windows is stubbed for v0.7.
+- **`sidecar tap`** / **`sidecar replay`** — wrap-and-run a sidecar binary, frame its stdout as NDJSON, validate each envelope against an optional JSON Schema (`--schema <path>`, powered by Ajv), and record the raw stream to a file with `--record`. `sidecar replay` reads the recording back to stdout or pipes it into a fresh process via `--to-exec`, optionally rate-limited with `--rate <lps>`.
+- **`forensics`** — one-shot bundle for post-crash analysis. Resolves the project, lists files in `appDataDir`/`appLogDir`, tails the most-recent log for panic markers, pulls macOS `DiagnosticReports` filtered by `productName`, captures a brief live OS-log tail, and writes `summary.md` + `summary.json` + supporting artifacts. Zero bridge calls — works on a dead app.
+
+### Internal
+
+- `src/util/tauriConfig.ts` — `tauri.conf.json` loader (JSONC-tolerant), identifier resolver for v1+v2 layouts, capability discovery, `resolveTauriPaths` matching the `dirs` crate semantics for all three platforms.
+- `src/util/ndjson.ts` — `LineFramer` (CRLF/LF, chunked input, blank-line preservation) and `NdjsonValidator` (Ajv wrapper that distinguishes parse errors from schema mismatches).
+- `src/platform/oslog/{darwin,linux,windows}.ts` — per-platform OS log adapter pattern, mirrors the existing `src/platform/{x11,wayland,...}.ts` shape.
+- Per-domain schemas: `src/schemas/{tauriConfig,osLog,sidecar}.ts`.
+- New dependencies: `ajv` ^8, `ajv-formats` ^3 — loaded via `createRequire` to dodge ESM/CJS interop friction.
+- Command count: 25 → 31. Test count: 623 → 696.
+
+### Notes for skill / docs consumers
+
+- The agent skill (`.agents/skills/tauri-agent-tools`) now distinguishes bridge-required vs bridge-free commands, and adds a debugging decision tree: bridge is healthy → existing 25 commands; bridge isn't responding → start with `forensics`; sidecar is the suspect → `sidecar tap`.
 
 ## [0.6.0] - 2026-04-04
 
@@ -204,11 +248,24 @@ The toolkit can now diagnose Tauri apps without needing a live debug bridge — 
 - `--target <regex>` filtering by Rust module path
 - `--source <source>` filtering by origin (`rust`, `sidecar`, `all`, or `sidecar:<name>`)
 - Rust bridge: `LogBuffer` ring buffer (max 1000 entries), `BridgeLogLayer` tracing layer, `spawn_sidecar_monitored()` helper, `POST /logs` endpoint, `create_log_layer()` public API
+- Zod schema validation at all trust boundaries
+- Domain-split schema files (`schemas/bridge.ts`, `schemas/dom.ts`, `schemas/commands.ts`, `schemas/platform.ts`) with barrel re-export
+- Cross-module boundary integration tests
+- Import DAG linter (`scripts/check-imports.mjs`)
 
 ### Changed
 
 - `start_bridge()` now returns `(u16, Arc<LogBuffer>)` instead of `u16`
 - Bridge example requires `tracing` and `tracing-subscriber` crate dependencies
+- Replaced manual validation with Zod enum schemas for levels, modes, and IDs
+- Replaced `z.lazy` with getter-based recursion for recursive schemas
+- Additional TypeScript strictness options enabled (`noUncheckedIndexedAccess`, `noImplicitReturns`, `noFallthroughCasesInSwitch`)
+
+### Fixed
+
+- CLI output consistency, validation, and discoverability improvements
+- Schema validation hardening, regex safety, and dedup X11 parser
+- `parseEnum` generics updated for Zod v4 compatibility
 
 ## [0.3.0] - 2026-03-17
 

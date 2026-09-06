@@ -1,7 +1,7 @@
 ---
 name: tauri-bridge-setup
 description: How to add the tauri-agent-tools Rust dev bridge to a Tauri application
-version: 0.9.2
+version: 0.9.3
 tags: [tauri, rust, bridge, setup, integration, multi-window, process-tree, capabilities, devtools, health]
 ---
 
@@ -13,7 +13,7 @@ The bridge runs **only in debug builds** and is stripped from release builds aut
 
 ## Re-copying for v0.8 (optional enrichment — not required)
 
-> **Upgrading from v0.7:** Bridge v0.8 adds cursor-mode `/logs` reads (non-draining, long-polling) that power `logs --follow` and let multiple log consumers coexist. It is a **drop-in re-copy** of `dev_bridge.rs` — no `main.rs` changes this time. Without it, `logs --follow` emits a one-time note and degrades to drain polling.
+> **Upgrading from v0.7:** Bridge v0.8 adds cursor-mode `/logs` reads (non-draining, long-polling) that power `logs`, `rust-logs`, and `capture` (including `logs --follow`) and let multiple log consumers coexist. It is a **drop-in re-copy** of `dev_bridge.rs` — no `main.rs` changes this time. Without it, `logs --follow` emits a one-time note and degrades to drain polling.
 
 ## Re-copying for v0.7 (optional enrichment — not required)
 
@@ -149,7 +149,8 @@ Use `probe` to discover available windows:
 
 ```bash
 tauri-agent-tools probe --json
-# → { "bridges": [{ "windows": ["main", "overlay", "settings"], ... }] }
+# → { "target": { "pid": 12345, "port": 9876, "windowLabel": "main",
+#       "describe": { "windows": ["main", "overlay", "settings"] }, ... }, ... }
 ```
 
 ## Optional: Sidecar Log Capture + Process Visibility

@@ -59,6 +59,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Install ImageMagick
+        run: sudo apt-get update && sudo apt-get install -y imagemagick
+
       - name: Lint
         run: npm run lint
 
@@ -67,6 +70,9 @@ jobs:
 
       - name: Run tests
         run: npm test
+
+      - name: Verify package versions and contents
+        run: npm run check:package
 
       - name: Publish to npm (skip if already published)
         run: |

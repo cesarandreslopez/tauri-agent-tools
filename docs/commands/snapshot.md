@@ -17,13 +17,15 @@ tauri-agent-tools snapshot -o <prefix> [options]
 |--------|-------------|---------|
 | `-o, --output <prefix>` | Output path prefix (e.g. `/tmp/debug`) | (required) |
 | `-s, --selector <css>` | CSS selector to screenshot (full window if omitted) | — |
-| `-t, --title <regex>` | Window title to match — regex; quote titles with spaces | auto-discover |
+| `-t, --title <pattern>` | Window title (X11: regex; macOS/Wayland: substring); quote titles with spaces | auto-discover |
 | `-w, --window-id <id>` | Platform window id (from `list-windows`) — overrides `--title` | — |
 | `--dom-depth <number>` | DOM tree depth | `3` |
 | `--eval <js>` | Additional JS to eval and save | — |
 | `--json` | Output structured manifest | — |
 | `--port <number>` | Bridge port (auto-discover if omitted) | — |
 | `--token <string>` | Bridge token (auto-discover if omitted) | — |
+| `--pid <number>` | Select an app bridge by PID | — |
+| `--window-label <label>` | Select a webview | `main` |
 
 ## Output Files
 
@@ -91,3 +93,5 @@ Each sub-step (screenshot, DOM, page state, storage, eval) is independent. If on
   "storage": "/tmp/snap-storage.json"
 }
 ```
+
+`--dom-depth` must be a non-negative integer. Full-window PNG capture on macOS and Wayland needs only native capture tools; element crops and X11 capture also require ImageMagick. Platform prerequisites are checked before the snapshot starts. Use `capture` when other artifacts should still be collected despite missing screenshot tools.

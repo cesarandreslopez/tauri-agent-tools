@@ -4,7 +4,7 @@ import type { BridgeConfig } from '../schemas/bridge.js';
 import type { PlatformAdapter } from '../types.js';
 import { BridgeClient } from '../bridge/client.js';
 import { discoverBridge, discoverBridgesByPid } from '../bridge/tokenDiscovery.js';
-import { CliError } from '../util/errors.js';
+import { CliError } from '../errors.js';
 
 /**
  * Options parsed from the bridge-related CLI flags.

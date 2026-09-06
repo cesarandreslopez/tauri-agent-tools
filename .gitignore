@@ -20,6 +20,4 @@ contextful-tlap/
 examples/**/target/
 # Tauri build.rs codegen — regenerated every cargo check
 examples/**/gen/
-# Example crates intentionally don't commit lockfiles so integrators who copy
-# the example resolve against their own dependency set rather than ours.
-examples/**/Cargo.lock
+# The executable bridge example commits Cargo.lock for reproducible CI builds.

@@ -12,7 +12,7 @@
 
 ## Display Server Detection
 
-The CLI automatically detects the display server at startup:
+The CLI detects the display server when an operation needs native window tools:
 
 ```mermaid
 flowchart TD
@@ -123,7 +123,7 @@ flowchart TD
 
 === "Windows (Planned)"
 
-    Windows support is planned but not yet implemented. Contributions welcome!
+    Native window inspection and screenshots are not implemented on Windows. Bridge commands and supported bridge-free diagnostics can still run; `os-logs` remains a stub and the deep OS process walk is Unix-only.
 
     Potential approach: PowerShell for window enumeration, .NET APIs for screenshot capture.
 
@@ -133,9 +133,7 @@ The CLI checks for required tools on first use and reports missing ones:
 
 ```bash
 $ tauri-agent-tools list-windows
-Error: Missing required tools:
-  xdotool: sudo apt install xdotool
-  import: sudo apt install imagemagick
+Missing required tool: xdotool. Install the window-inspection tool for your display server.
 ```
 
-Tools are only checked once per session. The check runs on the first command that needs platform tools (screenshot, info, list-windows, wait with `--title`).
+Checks are cached by display server and operation. Window inspection needs only the window tool; native full-window PNG capture on macOS/Wayland does not require ImageMagick. Crops, resizing, JPEG output, diff, and X11 capture do. Bridge-only commands do not initialize an adapter. Title matching uses regex on X11 and substrings on macOS/Sway/Hyprland.

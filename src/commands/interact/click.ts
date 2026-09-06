@@ -4,7 +4,7 @@ import type { BridgeClient } from '../../bridge/client.js';
 import { addInteractOptions, escapeSelector } from './shared.js';
 import { evaluateExpression } from '../../bridge/evaluate.js';
 import { pollUntil } from '../../util/poll.js';
-import { CliError } from '../../util/errors.js';
+import { CliError } from '../../errors.js';
 import { ClickResultSchema } from '../../schemas/interact.js';
 
 export function buildClickScript(

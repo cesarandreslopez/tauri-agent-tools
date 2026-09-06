@@ -3,7 +3,7 @@ import { Command } from 'commander';
 import { addBridgeOptions, resolveBridge } from './shared.js';
 import type { BridgeOpts } from './shared.js';
 import { evaluateExpression } from '../bridge/evaluate.js';
-import { CliError } from '../util/errors.js';
+import { CliError } from '../errors.js';
 
 export function registerEval(program: Command): void {
   const cmd = new Command('eval')

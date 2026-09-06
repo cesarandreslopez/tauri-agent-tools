@@ -16,7 +16,7 @@ import {
 import type { OsLogLevel } from '../schemas/osLog.js';
 import { readRustLogs, newLogCursor, type LogCursor } from '../bridge/logReader.js';
 export { LOG_CURSOR_UNAVAILABLE_NOTE } from '../bridge/logReader.js';
-import { CliError } from '../util/errors.js';
+import { CliError } from '../errors.js';
 
 interface LogsOpts extends BridgeOpts {
   config?: string;

@@ -47,6 +47,9 @@ jobs:
       - name: Run tests
         run: npm test
 
+      - name: Verify package versions and contents
+        run: npm run check:package
+
   rust-bridge:
     name: Rust bridge (${{ matrix.os }})
     strategy:

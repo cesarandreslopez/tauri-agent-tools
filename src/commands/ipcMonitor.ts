@@ -1,6 +1,6 @@
 import { Command } from 'commander';
 import { ipcObserver, readObserver, closeObserver } from '../bridge/observers.js';
-import { monitorFor } from '../util/monitor.js';
+import { monitorFor, createSignalScope } from '../util/monitor.js';
 import { z } from 'zod';
 import { addBridgeOptions, resolveBridge, parsePositiveInt } from './shared.js';
 import { IpcEntrySchema } from '../schemas/commands.js';
@@ -77,6 +77,7 @@ export function registerIpcMonitor(program: Command): void {
 
     const bridge = await resolveBridge(opts);
     const scripts = ipcObserver();
+    const signals = createSignalScope();
     try {
       const patchResult = await bridge.eval(scripts.patch);
       if (patchResult === 'no_tauri') throw new Error('Tauri invoke API not found. Expected window.__TAURI_INTERNALS__.invoke or window.__TAURI__.core.invoke.');
@@ -86,7 +87,7 @@ export function registerIpcMonitor(program: Command): void {
         console.error('Monitoring IPC calls... (Ctrl+C to stop)');
       }
 
-      await monitorFor(opts, async () => {
+      await monitorFor({ ...opts, signal: signals.signal }, async () => {
         const entries = z.array(IpcEntrySchema).parse(await readObserver(bridge, scripts));
 
         for (const entry of entries) {
@@ -123,6 +124,7 @@ export function registerIpcMonitor(program: Command): void {
       });
     } finally {
       await closeObserver(bridge, scripts);
+      signals.dispose();
       if (opts.stats) renderStats(stats);
     }
   });

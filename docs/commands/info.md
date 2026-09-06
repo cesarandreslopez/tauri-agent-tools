@@ -8,14 +8,14 @@ Show window geometry and display server info.
 ## Usage
 
 ```bash
-tauri-agent-tools info (--title <regex> | --window-id <id>) [options]
+tauri-agent-tools info (--title <pattern> | --window-id <id>) [options]
 ```
 
 ## Options
 
 | Option | Description | Default |
 |--------|-------------|---------|
-| `-t, --title <regex>` | Window title to match — regex; quote titles with spaces | — |
+| `-t, --title <pattern>` | Window title (X11: regex; macOS/Wayland: substring); quote titles with spaces | — |
 | `-w, --window-id <id>` | Platform window id (from `list-windows`) — overrides `--title` | — |
 | `--json` | Output as JSON | — |
 
@@ -64,8 +64,10 @@ tauri-agent-tools info --window-id 12345678
 
 ## Notes
 
-- The `--title` flag accepts a regex pattern for matching
+- `--title` uses a regex on X11 and substring matching on macOS, Sway, and Hyprland
 - `--window-id` skips the title search entirely — take the id from `list-windows --json` (`windowId` field); its format is platform-specific (X11/macOS/Sway numeric, Hyprland hex `0x…`)
 - `--window-id` (platform/OS window) is unrelated to `--window-label` (Tauri webview label, a bridge concept)
 - Window geometry includes decoration (title bar, borders)
-- Display server is one of: `x11`, `wayland`, `darwin`
+- Display server is one of: `x11`, `wayland-sway`, `wayland-hyprland`, `darwin`
+
+Window inspection requires only the platform window tool; ImageMagick is not required.

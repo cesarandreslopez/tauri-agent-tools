@@ -4,7 +4,7 @@
  * Import DAG linter for tauri-agent-tools.
  *
  * Enforces the module dependency hierarchy documented in
- * specs/refactor/architecture.md. Each module may only import
+ * CLAUDE.md and docs/architecture/overview.md. Each module may only import
  * from modules listed in ALLOWED_DEPS; all other internal imports
  * are violations.
  *
@@ -32,17 +32,19 @@ const ALLOWED_DEPS = {
   // Leaf — only external (zod)
   'schemas/':    [],
 
+  'errors.ts':   [],
+
   'types.ts':    ['schemas/'],
 
-  'util/':       ['schemas/', 'types.ts'],
+  'util/':       ['errors.ts', 'schemas/', 'types.ts'],
 
-  'bridge/':     ['schemas/', 'types.ts'],
+  'bridge/':     ['errors.ts', 'schemas/', 'types.ts'],
 
   'platform/':   ['util/', 'schemas/', 'types.ts'],
 
-  'commands/':   ['bridge/', 'platform/', 'util/', 'schemas/', 'types.ts'],
+  'commands/':   ['errors.ts', 'bridge/', 'platform/', 'util/', 'schemas/', 'types.ts'],
 
-  'cli.ts':      ['commands/', 'platform/', 'bridge/', 'schemas/', 'types.ts'],
+  'cli.ts':      ['errors.ts', 'commands/', 'platform/', 'bridge/', 'schemas/', 'types.ts'],
 };
 
 // ─── Helpers ────────────────────────────────────────────────────────────────

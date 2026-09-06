@@ -1,6 +1,6 @@
 # Command Reference
 
-tauri-agent-tools provides 38 commands for inspecting, interacting with, monitoring, post-mortem analysis, and diagnosing Tauri applications. Inspection commands are read-only. Interaction commands are debug-only (require the dev bridge). Bridge-free diagnostics work on dead apps and release builds.
+tauri-agent-tools provides 38 commands for inspecting, interacting with, monitoring, post-mortem analysis, and diagnosing Tauri applications. DOM, screenshot, and storage inspection read state; `eval` can change it, and monitors install temporary instrumentation. Interaction commands are debug-only (require the dev bridge). Bridge-free diagnostics work on dead apps and release builds.
 
 ## Command Summary
 
@@ -38,10 +38,10 @@ tauri-agent-tools provides 38 commands for inspecting, interacting with, monitor
 | `sidecar replay` | No | Replay a recorded NDJSON stream; `--tap-format` unwraps tap wrapper rows, `--dir in\|out` filters by direction |
 | `forensics` | No | Post-crash bundle (works on dead apps) |
 | `logs` | Optional | Merge scattered app logs (on-disk + bridge ring buffer) into one timestamp-ordered stream; `--follow` tails the live bridge via v0.8 non-draining cursor reads (drain-polling fallback on older bridges) |
-| `process-tree` | Yes (v0.7+) | Tauri PID + registered sidecars with liveness |
-| `capabilities audit` | Yes (v0.7+) | Live capability audit (wildcards, over-broad scopes) |
-| `webview attach` | Yes (v0.7+) | Webview inspector URL or platform hint |
-| `health` | Yes (v0.7+) | Quick "is this app sick" check (CI-friendly) |
+| `process-tree` | Optional with `--deep`/PID | Tauri PID + registered sidecars with liveness |
+| `capabilities audit` | Yes; v0.7+ for full output | Live capability audit (wildcards, over-broad scopes) |
+| `webview attach` | Yes; v0.7+ for full output | Webview inspector URL or platform hint |
+| `health` | Yes; v0.7+ for full output | Quick "is this app sick" check (CI-friendly) |
 | `diagnose` | Optional | Best-effort super-command (forensics + bridge data) |
 | `bundle` | Optional | Shareable incident archive: merged logs + process tree + app-paths + forensics (+ optional capture), redacted |
 
@@ -105,9 +105,9 @@ Work without the dev bridge — for release builds, dead apps, and sidecar proce
 - **forensics** — one-shot bundle for post-crash analysis (composes the above; works on dead apps)
 - **logs** — merge an app's scattered logs (on-disk `tauri-plugin-log` files + the live bridge `/logs` ring buffer) into one timestamp-ordered NDJSON stream, normalized to UTC; filter by `--level`/`--source`/`--filter` and `--correlate` to infer correlation ids (works with no bridge); `--follow` tails the live bridge via v0.8 non-draining cursor reads, falling back to drain-polling on older bridges (`--interval <ms>` sets the fallback poll interval, default 2000)
 
-### Bridge-extending diagnostics (new in 0.7, requires bridge v0.7.0+)
+### Bridge-extending diagnostics
 
-Talk to new dev-bridge endpoints. Each feature-detects via `GET /version` and surfaces a clear upgrade error against older bridges.
+Feature-detect via `GET /version` and degrade with a note against older bridges. Use `--strict` to fail when an endpoint is unavailable. `process-tree --deep` uses an OS walk and can work without a bridge when a PID is provided.
 
 - **process-tree** — Tauri PID + registered sidecars rendered as a tree
 - **capabilities audit** — live audit of declared Tauri capabilities, flags wildcard and over-broad scopes
@@ -148,3 +148,23 @@ tauri-agent-tools ipc-monitor --duration 5000
 tauri-agent-tools console-monitor --duration 10000 --level error
 tauri-agent-tools rust-logs --duration 10000 --level warn
 ```
+
+### Automation contracts
+
+- `eval --json` returns `{ "result": value }` and awaits promises. `wait` and `check --eval` use JavaScript truthiness before serialization. Thrown expressions fail.
+- Fatal errors with `--json` use `{ "error": { "code": "…", "message": "…", "hint": "…" } }` on stderr and exit nonzero. Results stay on stdout, including failed assertions and image-threshold results. Monitor records are NDJSON; warnings go to stderr.
+- `wait` requires exactly one condition; `check` requires at least one assertion. `check --no-errors` fails if observation is interrupted, entries are dropped, or cleanup fails.
+- Timeouts and polling intervals require positive integers. Depths, `click --wait`, and `capture --logs-duration` allow zero. Ports must be 1–65535; image thresholds must be 0–100. Conflicting click, scroll, evaluation-source, and replay-destination options are rejected.
+- `probe --json` identifies the selected PID, port, and window label and notes ambiguous auto-discovery. Use `--pid` for a specific app and `--window-label` for its webview.
+- Console, IPC, and mutation collectors have independent 1,000-entry buffers, report overflow, and take a final sample on stop. Rust log readers (`logs`, `rust-logs`, `capture`) use independent v0.8 cursors, with a warning and destructive drain fallback on older bridges.
+- `capture` preserves other artifacts when screenshot tools are unavailable and records `partial`, `warnings`, and `errorCount` in its manifest. An interrupted capture saves available evidence and cleans up its observer.
+- `diagnose --no-bridge` skips all bridge enrichment, even with an explicit target. `logs --follow` requires a bridge and cannot be combined with `--no-bridge`.
+- `config inspect` and config discovery accept JSON5/JSONC without damaging URLs or comment-like strings inside values.
+
+### Shareable bundles
+
+`bundle` collects privately, redacts text and structured credentials, and checks for residual secrets before publishing its directory or archive. Redaction failures prevent publication. Missing sources produce failed phases and `partial: true`. Images remain unredacted and appear in warnings.
+
+Only artifacts from the current run enter the archive. Unrelated existing output files are preserved and excluded; artifact symlinks are rejected. Archive failure leaves sanitized directory evidence and reports `archive: null`. `--no-archive` intentionally produces only the directory. Review artifacts before sharing.
+
+Quote a complete replay command: `sidecar replay recording.ndjson --to-exec "node my-sidecar.js"`. This value is split on spaces; shell syntax and arguments containing spaces are unsupported.

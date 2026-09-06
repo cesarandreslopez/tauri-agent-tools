@@ -28,7 +28,8 @@ graph TD
 
 `src/cli.ts` creates the `commander` program and registers all 38 commands. It also manages:
 
-- **Platform adapter creation** via `getAdapter()` — lazy initialization with tool checking
+- **Platform adapter creation** via `getAdapter(operation)` — lazy initialization and checks for `inspect`, `capture`, or `image` operations
+- **Fatal errors** — shared error codes/messages/hints, with JSON on stderr when requested
 - **Display server detection** — delegates to `detectDisplayServer()` in `src/platform/detect.ts`
 
 ## Command Pattern
@@ -130,3 +131,13 @@ Also exports `discoverBridgesByPid()` for `list-windows` to map PIDs to bridge c
 | `src/util/image.ts` | ImageMagick crop/resize operations |
 | `src/util/magick.ts` | ImageMagick v6/v7 version detection |
 | `src/util/exec.ts` | Secure process execution |
+
+## Shared evaluation and collector helpers
+
+`bridge/evaluate.ts` evaluates in the webview’s global context, awaits promises, and preserves typed results and original truthiness in a JSON-text envelope. It distinguishes thrown exceptions from ordinary strings beginning with `ERROR:`.
+
+`bridge/observers.ts` gives console and IPC subscribers independent bounded buffers, and creates separate mutation observers per selector/session. Safe snapshots bound payload sizes without invoking getters. `bridge/logReader.ts` gives each Rust log consumer its own v0.8 cursor, detecting older drain-only bridges by response shape.
+
+`util/monitor.ts` provides signal scopes spanning setup through cleanup, polling with a final sample, and an explicit interruption result. Checks fail when observation is incomplete; captures report partial evidence and warnings.
+
+`errors.ts` is a dependency-free leaf shared by CLI, commands, bridge, and utilities. `scripts/check-imports.mjs` enforces the dependency graph as part of lint. The example bridge is compiled and tested separately with its committed Cargo lockfile; it is not part of the TypeScript build.

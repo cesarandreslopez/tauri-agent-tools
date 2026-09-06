@@ -27,7 +27,7 @@ This package includes three [Agent Skills](https://agentskills.io):
 **Bridge-required commands** (Tauri app must have dev bridge running):
 `dom`, `eval`, `screenshot --selector`, `wait --selector/--eval`, `ipc-monitor`, `console-monitor`, `rust-logs`, `storage`, `page-state`, `mutations`, `snapshot`, `click`, `type`, `scroll`, `focus`, `navigate`, `select`, `invoke`, `capture`, `check`, `store-inspect`
 
-**Bridge-extending diagnostics** (require bridge v0.7+; degrade gracefully against older/vendored bridges, or pass `--strict` to fail):
+**Bridge-extending diagnostics** (use bridge v0.7+ for full output; degrade gracefully against older/vendored bridges, or pass `--strict` to fail):
 `process-tree`, `capabilities audit`, `webview attach`, `health`
 
 **Super-commands** (best-effort, compose the above):
@@ -40,8 +40,12 @@ This package includes three [Agent Skills](https://agentskills.io):
 
 **Bridge auto-discovery:** The CLI finds the running bridge via token files in `/tmp/tauri-dev-bridge-*.token`. No manual configuration needed.
 
-**Structured output:** Use `--json` on any command for machine-readable output.
+**Structured output:** Use `--json` where supported for machine-readable output. Fatal JSON errors go to stderr; command results stay on stdout.
 
 **Monitors:** Always pass `--duration <ms>` to `ipc-monitor`, `console-monitor`, `rust-logs`, and `mutations` to avoid indefinite execution.
 
 **Sidecar monitoring:** `rust-logs` can capture stdout/stderr from sidecar processes (external binaries spawned by the Tauri app). Use `--source sidecar` for all sidecars or `--source sidecar:<name>` for a specific one.
+
+**Automation:** `wait` requires exactly one condition, and `check` requires at least one assertion. An interrupted `check --no-errors` fails. `capture` reports incomplete evidence with `partial` and `warnings`. Console/IPC/mutation collectors keep independent bounded sessions; Rust log readers use independent cursors on bridge v0.8+.
+
+**Release checks:** Run `npm run lint`, `npm test`, `cargo test --locked --manifest-path examples/tauri-bridge/Cargo.toml`, `zensical build`, and `npm run check:package`. The example lockfile is tracked; Rust build outputs are excluded from npm.

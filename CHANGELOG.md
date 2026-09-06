@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.3] - 2026-09-06
+
+More reliable CLI automation, independent log collectors, and safer incident bundles. This release includes the changes since v0.9.2 plus fixes found during release review. Existing commands are retained; malformed numeric arguments and conflicting options now fail explicitly. The bridge protocol remains v0.8.0, and no bridge update is required for these CLI fixes.
+
+### Fixed
+
+- **Reliable evaluation and condition checks.** `eval`, `wait`, and `check` await promises and preserve JavaScript truthiness before the bridge serializes values. `false`, `0`, `null`, and `undefined` no longer look truthy just because they arrived as strings; the string `"false"` remains truthy. Thrown expressions fail, literal `ERROR:` strings remain ordinary results, and escaped selectors survive transport. Evaluation runs in the webview’s global context without shadowing app globals named `value`, `kind`, or `encoded`.
+- **Bounded waiting and one-time clicks.** Poll requests and sleeps share the same overall timeout budget. `click --wait` polls from the CLI before dispatching one click instead of leaving a delayed click running inside the webview after a request times out.
+- **Collector cleanup and interruption reporting.** Signal handling spans observer setup through cleanup. Console, IPC, and mutation monitors take a final sample even when the duration is shorter than the polling interval. Interrupted `check --no-errors` assertions fail instead of reporting success after observing only part of the requested duration; interrupted captures preserve available evidence and record warnings and `partial: true`. Lost setup replies, collection failures, and cleanup errors are handled explicitly.
+- **Independent monitoring sessions.** Concurrent console, IPC, and mutation collectors no longer drain or restore each other’s sessions. Buffers are limited to 1,000 entries with overflow warnings. Serialization handles circular references and BigInts, bounds large payloads, and avoids invoking object getters. IPC instrumentation excludes internal bridge callbacks and preserves application results and exceptions, including calls settling after a collector closes.
+- **Image comparison errors.** `diff` checks both image dimensions, accepts ImageMagick’s scientific-notation metrics, and treats only comparison exit code 1 as a valid difference. Missing tools, malformed images, dimension mismatches, and unwritable diff outputs fail instead of becoming misleading pixel counts. X11 window searches distinguish no matches from actual tool/display errors.
+- **Configuration and offline diagnostics.** Config and capability loading uses JSON5 instead of stripping comments with regex, preserving URLs and comment-like text inside strings. `diagnose --no-bridge` now skips bridge enrichment even with an explicit target.
+
+### Added
+
+- **`eval --json`** returns `{ "result": value }`. Fatal errors for JSON-enabled invocations use `{ "error": { "code", "message", "hint" } }` on stderr with a nonzero exit status; command results remain on stdout. Failed assertions and diff thresholds retain their structured stdout results.
+- **Selected-target details in `probe`.** JSON output includes the target PID, port, and window label, with a note when automatic discovery chooses among multiple bridges.
+- **Capture completeness metadata.** Capture manifests include optional `partial` and `warnings` fields. Missing screenshot tools no longer prevent collection of DOM, state, storage, and logs.
+- **Release checks.** Package validation checks package/lockfile/skill version agreement, required shipped files, and exclusion of Rust build outputs. Import-boundary validation is now part of lint.
+
+### Changed
+
+- `logs`, `rust-logs`, and `capture` use independent non-draining cursors on bridge v0.8+, replaying the retained backlog and reporting dropped entries. Older bridges emit a warning and fall back to destructive drain reads. `logs --follow` requires a bridge and rejects `--no-bridge`.
+- **Bundles stage privately before publication.** Text, structured storage credentials, and summaries are redacted and checked for remaining secrets before the new directory or archive is published. Redaction failure prevents publication. Archives contain only artifacts from the current run, unrelated existing output files are preserved, and artifact symlinks are rejected. Missing sources mark phases incomplete; archive failure preserves sanitized directory evidence and reports `archive: null`. Images remain unredacted and are listed as warnings for review.
+- Platform dependencies are checked per operation. Window listing, info, and title waits do not require ImageMagick. Full-window PNG capture on macOS/Wayland uses native tools; crop/resize/JPEG/diff and X11 capture require ImageMagick. Title matching is documented as regex on X11 and substring matching on macOS/Sway/Hyprland.
+- Integer, port, and percentage options receive stricter validation. `wait` requires exactly one condition, `check` requires an assertion, and conflicting evaluation sources, click types, scroll actions, and replay destinations are rejected. Sidecar replay examples quote the complete `--to-exec` value and document its whitespace-splitting limitation.
+- CI now covers Node 20/24 on Ubuntu, Node 24 on macOS, and locked Rust bridge builds/tests on both platforms. The example’s Cargo lockfile is tracked; local Rust `target` and generated `gen` directories are excluded from npm. CI and release jobs install ImageMagick for real image-comparison tests.
+- Updated READMEs, command references, architecture, troubleshooting, contributor/security guidance, and all three shipped skills. The documentation changelog mirrors this file; older design documents are marked as historical.
+
 ## [0.9.2] - 2026-08-24
 
 `type` and `select` now reach framework-controlled inputs and verify their writes. Additive and backwards-compatible — no flag changed meaning, all result-schema additions are optional-only, and no bridge change is required.

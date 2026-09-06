@@ -1,6 +1,6 @@
 {
   "name": "tauri-agent-tools",
-  "version": "0.9.2",
+  "version": "0.9.3",
   "description": "Agent-driven inspection toolkit for Tauri desktop apps",
   "type": "module",
   "bin": {
@@ -16,9 +16,11 @@
     "dev": "tsc --watch",
     "typecheck": "tsc --noEmit",
     "check:bridge-parity": "node scripts/check-bridge-parity.mjs",
-    "lint": "npm run check:bridge-parity && tsc --noEmit && eslint src/",
+    "lint": "npm run check:bridge-parity && npm run check:imports && tsc --noEmit && eslint src/",
     "lint:fix": "eslint src/ --fix",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "check:imports": "node scripts/check-imports.mjs",
+    "check:package": "node scripts/check-package.mjs"
   },
   "repository": {
     "type": "git",

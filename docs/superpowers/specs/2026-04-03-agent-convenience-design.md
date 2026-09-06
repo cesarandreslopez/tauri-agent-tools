@@ -1,5 +1,7 @@
 # tauri-agent-tools v0.6.0 — Agent Convenience Overhaul
 
+> Historical v0.6 design record. Proposed commands and examples below may differ from the current CLI; use the current command reference for supported behavior.
+
 **Date:** 2026-04-03
 **Status:** Approved
 

@@ -12,7 +12,8 @@ assignees: ''
 - **Display Server:** <!-- X11 / Wayland (Sway) / macOS -->
 - **Node.js version:** <!-- node --version -->
 - **tauri-agent-tools version:** <!-- tauri-agent-tools --version -->
-- **ImageMagick version:** <!-- convert --version | head -1 -->
+- **ImageMagick version (image operations only):** <!-- magick -version or convert -version -->
+- **Bridge target (if applicable):** <!-- selected PID, port, window label, and bridge version from probe --json; omit tokens -->
 
 ## Description
 

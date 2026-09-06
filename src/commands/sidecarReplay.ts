@@ -2,7 +2,7 @@ import { Command } from 'commander';
 import { spawn } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
-import { CliError } from '../util/errors.js';
+import { CliError } from '../errors.js';
 
 interface SidecarReplayOpts {
   toStdout?: boolean;

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { BridgeClient } from './client.js';
-import { CliError } from '../util/errors.js';
+import { CliError } from '../errors.js';
 
 const EvaluationSchema = z.discriminatedUnion('ok', [
   z.object({ ok: z.literal(true), value: z.unknown(), truthy: z.boolean() }),
@@ -15,7 +15,7 @@ const EvaluationSchema = z.discriminatedUnion('ok', [
 export function buildEvaluationScript(expression: string): string {
   return `(async () => {
     try {
-      const value = await eval(${JSON.stringify(expression)});
+      const value = await (0, eval)(${JSON.stringify(expression)});
       const kind = typeof value;
       const encoded = kind === 'undefined' ? null
         : ['bigint', 'symbol', 'function'].includes(kind) || (kind === 'number' && !Number.isFinite(value))

@@ -1,6 +1,6 @@
 # ipc-monitor
 
-Monitor Tauri IPC calls in real-time (read-only).
+Monitor Tauri IPC calls with temporary instrumentation.
 
 !!! note "Bridge Required"
     This command requires an active bridge connection and a Tauri IPC invoke API in the webview.
@@ -18,9 +18,13 @@ tauri-agent-tools ipc-monitor [options]
 | `--filter <command>` | Only show specific IPC commands (supports `*` wildcards) | — |
 | `--interval <ms>` | Poll interval in milliseconds | `500` |
 | `--duration <ms>` | Auto-stop after N milliseconds | — |
+| `--slow <ms>` | Flag calls taking at least this many milliseconds | — |
+| `--stats` | Print per-command count, errors, maximum and average latency on stderr | — |
 | `--json` | Output one JSON object per line | — |
 | `--port <number>` | Bridge port (auto-discover if omitted) | — |
 | `--token <string>` | Bridge token (auto-discover if omitted) | — |
+| `--pid <number>` | Select an app bridge by PID | — |
+| `--window-label <label>` | Select a webview | `main` |
 
 ## Examples
 
@@ -75,6 +79,10 @@ tauri-agent-tools ipc-monitor --interval 100 --duration 5000
 
 ## Notes
 
-- The monkey-patch is read-only — it wraps the original function and passes through all calls and results
+- The wrapper temporarily replaces the invoke function and preserves application results and exceptions; internal bridge result callbacks are excluded
 - If neither invoke API is found, the command reports an error
 - Cleanup happens automatically on SIGINT/SIGTERM or when `--duration` expires
+
+Each invocation has an independent session with a 1,000-entry buffer. Overflow is reported on stderr. The collector takes a final sample even when `--duration` is shorter than `--interval`, and removes its own instrumentation on completion, failure, SIGINT, or SIGTERM while the webview remains reachable. Force-killing the CLI or losing the webview can prevent cleanup. Intervals and durations must be positive whole milliseconds.
+
+Use `--duration` in automation. With `--json`, entries are NDJSON on stdout; warnings and fatal errors go to stderr.

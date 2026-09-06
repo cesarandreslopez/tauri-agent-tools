@@ -66,3 +66,5 @@ tauri-agent-tools list-windows --json
 - Tauri detection works by cross-referencing window PIDs with bridge token files in `/tmp/`
 - The `bridge` field in JSON output includes the port and token for direct bridge access
 - Window listing uses platform-native tools (`xdotool` on X11, `swaymsg` on Wayland, `osascript` on macOS)
+
+Window listing does not require ImageMagick. Hyprland uses `hyprctl`. On X11, a search with no windows returns an empty list; display and tool errors still fail.

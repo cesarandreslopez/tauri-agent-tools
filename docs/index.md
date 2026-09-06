@@ -20,11 +20,11 @@ Combine a bridge's knowledge of element positions (`getBoundingClientRect`) with
 ## Features
 
 - **DOM-targeted capture** — screenshot any CSS-selectable element with real screen pixels
-- **38 commands** — 14 read-only inspection commands, 11 interaction and workflow commands (click, type, scroll, focus, navigate, select, invoke, probe, capture, check, store-inspect), 7 bridge-free diagnostics (app-paths, config inspect, os-logs, sidecar tap, sidecar replay, forensics, logs), 4 bridge-extending diagnostics (process-tree, capabilities audit, webview attach, health), and the `diagnose` and `bundle` super-commands
+- **38 commands** — 14 inspection, evaluation, and monitoring commands, 11 interaction and workflow commands (click, type, scroll, focus, navigate, select, invoke, probe, capture, check, store-inspect), 7 bridge-free diagnostics (app-paths, config inspect, os-logs, sidecar tap, sidecar replay, forensics, logs), 4 bridge-extending diagnostics (process-tree, capabilities audit, webview attach, health), and the `diagnose` and `bundle` super-commands
 - **Cross-platform** — Linux X11, Linux Wayland/Sway, Linux Wayland/Hyprland, macOS
 - **Token authenticated** — random 32-char token, localhost-only bridge
 - **Agent Skills** — ships agentskills.io skills for AI coding agents
-- **JSON output** — all commands support `--json` for structured output
+- **JSON output** — commands with `--json` provide structured output and fatal-error envelopes
 
 ## Quick Install
 

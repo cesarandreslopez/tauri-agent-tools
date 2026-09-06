@@ -66,4 +66,4 @@ tauri-agent-tools diff /tmp/a.png /tmp/b.png --json
 
 ## Requirements
 
-Requires ImageMagick installed on the system. Both v6 (`compare`, `identify`) and v7 (`magick compare`, `magick identify`) are supported automatically. The `--threshold` option requires `identify` to compute image dimensions.
+Requires ImageMagick installed on the system. Both v6 (`compare`, `identify`) and v7 (`magick compare`, `magick identify`) are supported automatically. Both images must have matching dimensions, and `identify` must be able to read them for every comparison. Thresholds must be finite numbers from 0 to 100. ImageMagick exit code 1 means the images differ; tool failures, malformed images, and unwritable output paths are reported as errors instead of pixel counts. A threshold failure keeps its result on stdout and exits 1.

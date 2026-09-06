@@ -26,7 +26,9 @@
 ## Checklist
 
 - [ ] Code follows the project's style guidelines
+- [ ] `npm run lint` passes (including import boundaries and bridge parity)
 - [ ] `npm run build` completes without errors
+- [ ] `npm run check:package` verifies package contents and version consistency
 - [ ] `npm test` passes
 - [ ] New code has tests where applicable
 - [ ] No security issues introduced (uses `execFile()`, validates input)

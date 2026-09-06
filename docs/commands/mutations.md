@@ -22,6 +22,8 @@ tauri-agent-tools mutations <selector> [options]
 | `--json` | Output one JSON object per line | — |
 | `--port <number>` | Bridge port (auto-discover if omitted) | — |
 | `--token <string>` | Bridge token (auto-discover if omitted) | — |
+| `--pid <number>` | Select an app bridge by PID | — |
+| `--window-label <label>` | Select a webview | `main` |
 
 ## Examples
 
@@ -69,4 +71,8 @@ tauri-agent-tools mutations "body" --duration 5000 --interval 200
 
 - **Always use `--duration`** in automation to avoid indefinite execution.
 - The observer watches `childList` and `subtree` by default. Add `--attributes` to also track attribute changes.
-- If a previous session didn't clean up (e.g., hard kill), the command will warn and drain the existing log.
+- Sessions use separate observers and buffers, so different selectors and simultaneous subscribers do not share or drain each other’s events.
+
+Each invocation has an independent session with a 1,000-entry buffer. Overflow is reported on stderr. The collector takes a final sample even when `--duration` is shorter than `--interval`, and removes its own instrumentation on completion, failure, SIGINT, or SIGTERM while the webview remains reachable. Force-killing the CLI or losing the webview can prevent cleanup. Intervals and durations must be positive whole milliseconds.
+
+Use `--duration` in automation. With `--json`, entries are NDJSON on stdout; warnings and fatal errors go to stderr.

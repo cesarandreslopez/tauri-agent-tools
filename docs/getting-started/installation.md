@@ -76,3 +76,9 @@ tauri-agent-tools list-windows
 ```
 
 If any required tools are missing, the CLI will report which ones to install.
+
+## Dependencies by operation
+
+`list-windows`, `info`, and `wait --title` check only the window tool (`xdotool`, `swaymsg`, `hyprctl`, or `osascript`). They do not check ImageMagick. Full-window PNG capture on macOS/Wayland uses native capture tools; crops, resizing, JPEG output, image comparison, and X11 capture require ImageMagick. Bridge-only and bridge-free diagnostic commands do not require a display server or screenshot tools.
+
+Use `probe --json` to inspect bridge discovery and the selected PID, port, and window label. A successful window listing verifies only window-inspection prerequisites.

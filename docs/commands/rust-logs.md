@@ -24,6 +24,8 @@ tauri-agent-tools rust-logs [options]
 | `--json` | Output one JSON object per line | — |
 | `--port <number>` | Bridge port (auto-discover if omitted) | — |
 | `--token <string>` | Bridge token (auto-discover if omitted) | — |
+| `--pid <number>` | Select an app bridge by PID | — |
+| `--window-label <label>` | Select a webview | `main` |
 
 ## Examples
 
@@ -91,7 +93,7 @@ Unlike `console-monitor` which injects JavaScript to capture console output, `ru
 
 1. The bridge's `BridgeLogLayer` captures `tracing` events into a ring buffer (max 1000 entries)
 2. Sidecar processes spawned via `spawn_sidecar_monitored()` pipe stdout/stderr into the same buffer
-3. The CLI polls `POST /logs` at the specified interval, which drains the buffer and returns all entries
+3. The CLI polls `POST /logs` with its own cursor on bridge v0.8+, starting at cursor 0 to include the retained backlog; older bridges fall back to draining with a one-time warning
 4. Entries are filtered client-side by level, target, source, and text pattern
 
 ## Output Format
@@ -112,3 +114,7 @@ Unlike `console-monitor` which injects JavaScript to capture console output, `ru
 - The log buffer holds up to 1000 entries between polls — if your app produces more, increase poll frequency with `--interval`
 - No cleanup is needed on exit (unlike `console-monitor`, there are no JavaScript patches to undo)
 - If the bridge doesn't support `/logs` (old version), you'll get a clear error asking you to update `dev_bridge.rs`
+
+`rust-logs`, `logs`, and `capture` use independent cursors on bridge v0.8+, so concurrent readers receive the same retained entries. Evicted entries produce a dropped-entry warning. On older bridges, drain reads consume entries for other readers.
+
+The monitor takes a final sample when its duration expires or it receives SIGINT/SIGTERM, including durations shorter than the polling interval. Use positive whole milliseconds for both options.

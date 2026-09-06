@@ -48,13 +48,13 @@ Pick the row that matches what's broken. Commands marked **(bridge-free)** work 
 | Don't know what's wrong | `tauri-agent-tools diagnose -o ./diag` **(bridge-free, best-effort)** |
 | App crashed at startup | `tauri-agent-tools forensics --config ./src-tauri -o ./forensics` **(bridge-free)** |
 | App running, bridge isn't responding | `tauri-agent-tools probe` |
-| App + bridge up, webview looks wrong | `tauri-agent-tools health --json` *(needs bridge v0.7+)* |
+| App + bridge up, webview looks wrong | `tauri-agent-tools health --json` *(richer with bridge v0.7+; older bridges degrade)* |
 | Sidecar process is the suspect | `tauri-agent-tools sidecar tap --schema ./schema.json -- <cmd>` **(bridge-free)** |
 | Which files does the app touch? | `tauri-agent-tools app-paths --config ./src-tauri --exists` **(bridge-free)** |
 | Audit Tauri capabilities | `config inspect` (static) **or** `capabilities audit` (live) |
 | OS-level error in Console.app / journalctl | `tauri-agent-tools os-logs --identifier com.example.app --level error --duration 30000` **(bridge-free)** |
-| Get inspector / devtools URL | `tauri-agent-tools webview attach` *(needs bridge v0.7+)* |
-| What sidecars did the app spawn? | `tauri-agent-tools process-tree --json` *(needs bridge v0.7+)* |
+| Get inspector / devtools URL | `tauri-agent-tools webview attach` *(richer with bridge v0.7+; older bridges degrade)* |
+| What sidecars did the app spawn? | `tauri-agent-tools process-tree --json` *(richer with bridge v0.7+; older bridges degrade)* |
 
 ## Bridge-free vs bridge-required
 
@@ -66,10 +66,12 @@ Commands fall into two camps:
 **Bridge-required** — need the dev bridge running inside a debug build:
 `screenshot --selector`, `dom`, `eval`, `wait --selector`, `ipc-monitor`, `console-monitor`, `rust-logs`, `storage`, `page-state`, `mutations`, `snapshot`, `click`, `type`, `scroll`, `focus`, `navigate`, `select`, `invoke`, `capture`, `check`, `store-inspect`, `process-tree`, `capabilities audit`, `webview attach`, `health`.
 
-The four v0.7+ bridge commands feature-detect via `GET /version` — they emit a clear "requires bridge v0.7.0+, re-copy `dev_bridge.rs`" error against older bridges rather than failing with an opaque HTTP 404.
+The four bridge-extending commands feature-detect via `GET /version` and degrade with a note against older bridges. Pass `--strict` to require the richer endpoint. `process-tree --deep --pid <n>` uses an OS walk without a bridge.
 
 ## Platform caveats
 
 - **Windows** — `os-logs` is stubbed in v0.7; the Windows event log adapter is planned. `forensics` and `diagnose` still produce useful bundles on Windows, they just skip the live OS-log tail.
 - **Tauri 1** — `app-paths` encodes Tauri 2's `PathResolver` semantics. Tauri 1's paths differ slightly; expect minor drift in derived directories.
 - **Release builds** — the dev bridge requires `cfg!(debug_assertions)`. Use bridge-free commands for signed/notarized release artifacts.
+
+For offline-only triage, use `diagnose --no-bridge`; it honors this even with an explicit PID/port/token. For a shareable archive, use `bundle` and inspect its `partial` and `warnings` fields. Redaction failure prevents publication; images remain unredacted. Use `capture` when missing screenshot tools should still leave DOM, state, and logs available.

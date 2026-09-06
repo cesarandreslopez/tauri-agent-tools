@@ -1,7 +1,7 @@
 ---
 name: tauri-agent-tools
 description: CLI for inspecting and interacting with Tauri desktop apps — DOM queries, screenshots, interaction (click/type/scroll), IPC monitoring, store inspection, structured assertions, plus bridge-free diagnostics (unified cross-layer logs, deep OS process trees, OS logs, app paths, sidecar NDJSON tap/replay, forensic bundles) and the `diagnose`/`bundle` super-commands for one-shot triage. Works against older/vendored bridges by degrading gracefully.
-version: 0.9.2
+version: 0.9.3
 tags: [tauri, desktop, debugging, screenshot, dom, inspection, diff, mutations, snapshot, interaction, click, type, scroll, invoke, probe, capture, check, store-inspect, logs, bundle, process-tree, forensics, os-logs, app-paths, sidecar, config-inspect, diagnose]
 ---
 
@@ -36,7 +36,7 @@ Dependency checks follow the operation: window listing/info/title waits do not r
 
 `eval --json` returns `{ "result": value }`. It awaits promises and reports thrown expressions as errors. Commands accepting `--json` send fatal `{ "error": { "code": "…", "message": "…", "hint": "…" } }` responses to stderr and exit nonzero; result records remain on stdout.
 
-Choose exactly one condition for `wait`. Numeric intervals/timeouts must be positive integers. `check` requires an assertion; `--no-errors` fails if observation is incomplete.
+Choose exactly one condition for `wait`. Numeric intervals/timeouts must be positive integers; `click --wait` and `capture --logs-duration` also allow zero. `check` requires an assertion; `--no-errors` fails if observation is incomplete, including interruption by SIGINT/SIGTERM. Interrupted captures save available evidence with `partial: true` and warnings.
 
 Console/IPC/mutation collectors have independent bounded buffers, report drops, and collect a final batch on stop. They restore their own instrumentation on completion, error, SIGINT, and SIGTERM while the webview is reachable. `logs`, `rust-logs`, and `capture` use independent v0.8 cursors; older bridges warn and fall back to destructive drain reads.
 
@@ -56,7 +56,7 @@ Some commands require the Rust dev bridge running inside the Tauri app. Others w
 `screenshot --title`/`--window-id` (full window only), `wait --title`, `list-windows`, `info`, `diff`, `logs`, `app-paths`, `config inspect`, `os-logs`, `sidecar tap`, `sidecar replay`, `forensics`
 
 **Optional bridge** (work standalone, richer with a bridge):
-`probe`, `process-tree` (use `--deep` for a bridge-free OS walk), `logs` (merges on-disk files alone, or also drains the bridge ring buffer), `bundle`, `diagnose`
+`probe`, `process-tree` (use `--deep` for a bridge-free OS walk), `logs` (merges on-disk files alone, or also reads the bridge ring buffer with an independent cursor on v0.8+), `bundle`, `diagnose`
 
 The bridge auto-discovers via token files in `/tmp/tauri-dev-bridge-*.token`. No manual port/token configuration needed.
 
@@ -384,9 +384,9 @@ tauri-agent-tools eval "document.title" --window-label overlay --json
 | `forensics` | `--config <path>`, `--identifier <id>`, `-o <dir>`, `--since <dur>`, `--json` | no | One-shot forensic bundle (works on dead apps) |
 | `logs` | `--config <path>`, `--identifier <id>`, `--log-dir <path>`, `--log-file <path>`, `--level <lvl>`, `--source <re>`, `--filter <re>`, `--correlate`, `--follow`, `--interval <ms>`, `--no-bridge`, `--pretty` | optional | Merge on-disk log files + bridge ring buffer into one timestamp-ordered stream; `--follow` tails the bridge via v0.8 cursor reads (drain-polling fallback on older bridges) |
 | `process-tree` | `--deep`, `--pid <n>`, `--json` | optional | Tauri PID + sidecars (bridge /process); `--deep` walks the full OS descendant tree without the bridge |
-| `capabilities audit` | `--json` | yes (v0.7+) | Live Devtron-style audit of declared Tauri capabilities |
-| `webview attach` | `--print-url`, `--open`, `--json` | yes (v0.7+) | Print webview inspector URL or platform hint |
-| `health` | `--json` | yes (v0.7+) | Uptime + webview/sidecar liveness (exit non-zero if unhealthy) |
+| `capabilities audit` | `--json` | yes; v0.7+ for full output | Live Devtron-style audit of declared Tauri capabilities |
+| `webview attach` | `--print-url`, `--open`, `--json` | yes; v0.7+ for full output | Print webview inspector URL or platform hint |
+| `health` | `--json` | yes; v0.7+ for full output | Uptime + webview/sidecar liveness (exit non-zero if unhealthy) |
 | `diagnose` | `--config <path>`, `-o <dir>`, `--since <dur>`, `--no-bridge`, `--json` | optional | Best-effort super-bundle (forensics + live bridge enrichment) |
 | `bundle` | `--config <path>`, `-o <dir>`, `--with-capture`, `--no-archive`, `--json` | optional | Shareable incident bundle: logs + deep process tree + app-paths + forensics → redacted dir + .tar.gz |
 

@@ -7,7 +7,7 @@ import { addBridgeOptions, type BridgeOpts } from './shared.js';
 import { exec } from '../util/exec.js';
 import { redactDir, redactJson, redactText, scanResidualSecrets } from '../util/redactText.js';
 import { artifactFiles, publishArtifacts, publishFile } from '../util/incidentFiles.js';
-import { CliError } from '../util/errors.js';
+import { CliError } from '../errors.js';
 
 interface BundleOpts extends BridgeOpts {
   config?: string;

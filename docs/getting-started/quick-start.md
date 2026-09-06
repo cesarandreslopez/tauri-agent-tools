@@ -89,3 +89,15 @@ tauri-agent-tools eval "document.querySelectorAll('.item').length"
 - [Bridge Setup](bridge-setup.md) — add the Rust bridge to your Tauri app
 - [Command Reference](../commands/index.md) — all 38 commands with full options
 - [Platform Support](../platform-support.md) — platform-specific details
+
+## Reliable automation
+
+Select an app with `--pid` when several bridges are running. Use `--window-label` for a secondary webview and `--window-id` for an OS window. Title matching is regex on X11 and substring matching on macOS/Wayland.
+
+```bash
+tauri-agent-tools eval 'Promise.resolve(document.readyState)' --json
+tauri-agent-tools check --selector '#app' --no-errors --duration 1000 --json
+tauri-agent-tools capture -o /tmp/evidence --json
+```
+
+Check exit status and capture `partial`/`warnings` before treating evidence as complete. JSON results go to stdout; fatal error envelopes and warnings go to stderr.

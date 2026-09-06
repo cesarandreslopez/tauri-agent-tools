@@ -1,6 +1,6 @@
 import { Command } from 'commander';
 import { mutationObserver, readObserver, closeObserver } from '../bridge/observers.js';
-import { monitorFor } from '../util/monitor.js';
+import { monitorFor, createSignalScope } from '../util/monitor.js';
 import { z } from 'zod';
 import { addBridgeOptions, resolveBridge, parsePositiveInt } from './shared.js';
 import { MutationEntrySchema } from '../schemas/commands.js';
@@ -47,6 +47,7 @@ export function registerMutations(program: Command): void {
   }) => {
     const bridge = await resolveBridge(opts);
     const scripts = mutationObserver(selector, !!opts.attributes);
+    const signals = createSignalScope();
     try {
       const patchResult = await bridge.eval(scripts.patch);
       if (patchResult === 'not_found') throw new Error(`Element not found: ${selector}`);
@@ -56,7 +57,7 @@ export function registerMutations(program: Command): void {
         console.error(`Watching mutations on ${selector}... (Ctrl+C to stop)`);
       }
 
-      await monitorFor(opts, async () => {
+      await monitorFor({ ...opts, signal: signals.signal }, async () => {
         const entries = z.array(MutationEntrySchema).parse(await readObserver(bridge, scripts));
 
         for (const entry of entries) {
@@ -69,6 +70,7 @@ export function registerMutations(program: Command): void {
       });
     } finally {
       await closeObserver(bridge, scripts);
+      signals.dispose();
     }
   });
 

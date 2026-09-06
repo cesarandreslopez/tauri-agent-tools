@@ -114,3 +114,9 @@ If you're using an AI coding agent (Claude Code, Codex, Cursor, etc.), the `taur
 ```bash
 cat "$(npm root -g)/tauri-agent-tools/.agents/skills/tauri-bridge-setup/SKILL.md"
 ```
+
+## CLI and bridge versions
+
+CLI v0.9.3 uses bridge protocol v0.8.0; these versions advance independently. `logs`, `rust-logs`, and `capture` use separate non-draining log cursors on v0.8+ and warn before falling back to drain reads on older bridges. No bridge re-copy is required for the v0.9.3 CLI fixes.
+
+The executable example has a committed Cargo lockfile and is compiled and tested on macOS and Linux in CI. When validating the example locally, use `cargo test --locked --manifest-path examples/tauri-bridge/Cargo.toml`. npm excludes its Rust build and generated output directories.

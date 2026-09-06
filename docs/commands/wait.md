@@ -17,13 +17,16 @@ tauri-agent-tools wait [options]
 |--------|-------------|---------|
 | `-s, --selector <css>` | Wait for CSS selector to match an element | — |
 | `-e, --eval <js>` | Wait for JS expression to be truthy | — |
-| `-t, --title <regex>` | Wait for window with title (no bridge needed) | — |
+| `-t, --title <pattern>` | Wait for window with title (no bridge needed) | — |
 | `--timeout <ms>` | Maximum wait time in milliseconds | `10000` |
 | `--interval <ms>` | Polling interval in milliseconds | `500` |
+| `--json` | Output the match mode, target/result, and elapsed time | — |
 | `--port <number>` | Bridge port (auto-discover if omitted) | — |
 | `--token <string>` | Bridge token (auto-discover if omitted) | — |
+| `--pid <number>` | Select an app bridge by PID | — |
+| `--window-label <label>` | Select a webview | `main` |
 
-One of `--selector`, `--eval`, or `--title` is required.
+Choose exactly one of `--selector`, `--eval`, or `--title`. Timeouts and intervals must be positive whole milliseconds (maximum 2147483647).
 
 ## Examples
 
@@ -64,3 +67,7 @@ tauri-agent-tools wait --selector ".loading-done" --interval 200 --timeout 30000
 - **`--title`**: polls the platform adapter's `findWindow()` until a matching window appears
 - Throws an error if the condition is not met within `--timeout`
 - Exits with code 0 on success, non-zero on timeout
+
+Promises are awaited and JavaScript truthiness is evaluated before serialization: `false`, `0`, `null`, and `undefined` keep waiting; the string `"false"` is truthy. Invalid selectors and thrown expressions fail immediately. Each poll and sleep consumes the same overall timeout budget.
+
+Title matching uses regex on X11 and substrings on macOS/Sway/Hyprland. `wait --title` does not require ImageMagick. JSON results for eval mode retain the historical bridge-serialized `result` field; use `eval --json` when a typed value is needed.

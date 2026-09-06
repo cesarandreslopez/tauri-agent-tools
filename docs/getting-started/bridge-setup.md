@@ -82,7 +82,7 @@ tauri-agent-tools dom --depth 2
 ```
 
 !!! note "Upgrading to bridge v0.8"
-    Bridge v0.8 adds a non-draining, long-polling cursor mode to `/logs`, which powers `logs --follow`. Upgrading is a drop-in re-copy of `examples/tauri-bridge/src/dev_bridge.rs` (step 2) — no `main.rs` changes needed. Against older bridges, `logs --follow` emits a one-time note and degrades to drain polling.
+    Bridge v0.8 adds a non-draining, long-polling cursor mode to `/logs`, which powers `logs`, `rust-logs`, and `capture`, including `logs --follow`. Upgrading is a drop-in re-copy of `examples/tauri-bridge/src/dev_bridge.rs` (step 2) — no `main.rs` changes needed. Against older bridges, `logs --follow` emits a one-time note and degrades to drain polling.
 
 ## How It Works
 
@@ -116,7 +116,7 @@ sequenceDiagram
 - **Localhost only** — the bridge binds to `127.0.0.1`
 - **Token authenticated** — every request requires a random 32-character token
 - **Development only** — wrapped in `cfg!(debug_assertions)`, stripped in release builds
-- **Inspection is read-only** — inspection commands only read DOM state
+- **Eval is unrestricted** — `/eval` can read or modify app state; monitors install temporary instrumentation
 - **Interaction is debug-only** — interaction commands use eval-based DOM dispatch, sandboxed to the webview
 
 ## Troubleshooting
